@@ -9,8 +9,64 @@
     <title>Keysocket</title>
 </head>
 <body>
-    <div class="terminal-container">
-        <div class="terminal" id="terminal"></div>
+    <div class="container">
+        <!-- Connection Form -->
+        <div class="connection-panel" id="connectionPanel">
+            <h1>SSH Connection</h1>
+            <form id="connectionForm">
+                <div class="form-group">
+                    <label for="host">Host:</label>
+                    <input type="text" id="host" name="host" placeholder="example.com" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="port">Port:</label>
+                    <input type="number" id="port" name="port" value="22" min="1" max="65535" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="username">Username:</label>
+                    <input type="text" id="username" name="username" placeholder="user" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Authentication Method:</label>
+                    <div class="radio-group">
+                        <label class="radio-label">
+                            <input type="radio" name="authMethod" value="password" checked>
+                            Password
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="authMethod" value="key">
+                            Private Key
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-group" id="passwordGroup">
+                    <label for="password">Password:</label>
+                    <input type="password" id="password" name="password" placeholder="Enter password">
+                </div>
+
+                <div class="form-group" id="keyGroup" style="display: none;">
+                    <label for="privateKey">Private Key:</label>
+                    <textarea id="privateKey" name="privateKey" placeholder="Paste your private key here (PEM format)"></textarea>
+                </div>
+
+                <button type="submit" class="connect-btn">Connect</button>
+            </form>
+        </div>
+
+        <!-- Terminal -->
+        <div class="terminal-wrapper" id="terminalWrapper" style="display: none;">
+            <div class="terminal-header">
+                <span id="connectionInfo"></span>
+                <button id="disconnectBtn" class="disconnect-btn">Disconnect</button>
+            </div>
+            <div class="terminal-container">
+                <div class="terminal" id="terminal"></div>
+            </div>
+        </div>
     </div>
 
     <script src="/js/terminal.js"></script>
