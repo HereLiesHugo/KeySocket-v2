@@ -1,0 +1,12 @@
+@import url('https://fonts.googleapis.com/css2?family=Jersey+10&display=swap');
+
+body {
+    font-family: "Jersey 10", sans-serif;
+    font-weight: 400;
+    font-style: normal;
+    justify-content: center;
+    align-items: center;
+    background: #000000;
+    background: radial-gradient(circle,rgba(0, 0, 0, 1) 0%, rgba(0, 10, 51, 1) 35%, rgba(0, 21, 112, 1) 70%, rgba(0, 47, 255, 1) 90%, rgba(0, 17, 94, 1) 100%);
+}
+
