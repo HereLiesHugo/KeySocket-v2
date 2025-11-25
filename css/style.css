@@ -36,7 +36,8 @@ body {
     height: 100%;
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    justify-content: flex-start;
+    overflow-y: auto;
 }
 
 .connection-panel h1 {
@@ -44,6 +45,77 @@ body {
     margin-bottom: 30px;
     text-align: center;
     text-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+}
+
+/* Saved Connections Section */
+.saved-connections-section {
+    margin-bottom: 25px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid rgba(0, 255, 0, 0.3);
+}
+
+.saved-connections-controls {
+    display: flex;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.saved-connections-select {
+    flex: 1;
+    padding: 10px;
+    background: rgba(0, 0, 0, 0.8);
+    border: 1px solid #00ff00;
+    border-radius: 4px;
+    color: #00ff00;
+    font-family: monospace;
+    font-size: 0.95em;
+    cursor: pointer;
+    outline: none;
+    transition: all 0.3s ease;
+}
+
+.saved-connections-select:focus {
+    border-color: #00ffff;
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
+}
+
+.saved-connections-select option {
+    background: rgba(0, 20, 60, 0.9);
+    color: #00ff00;
+    padding: 5px;
+}
+
+.action-btn {
+    padding: 10px 15px;
+    border: 1px solid #00ff00;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.8);
+    color: #00ff00;
+    font-family: "Jersey 10", sans-serif;
+    font-size: 0.9em;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    outline: none;
+}
+
+.action-btn:hover {
+    background: rgba(0, 255, 0, 0.1);
+    box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
+}
+
+.action-btn:active {
+    transform: scale(0.98);
+}
+
+.delete-btn {
+    border-color: #ff3333;
+    color: #ff3333;
+}
+
+.delete-btn:hover {
+    background: rgba(255, 51, 51, 0.1);
+    box-shadow: 0 0 10px rgba(255, 51, 51, 0.3);
 }
 
 #connectionForm {
@@ -114,6 +186,16 @@ body {
     accent-color: #00ff00;
 }
 
+.button-group {
+    display: flex;
+    gap: 15px;
+    margin-top: 10px;
+}
+
+.button-group button {
+    flex: 1;
+}
+
 .connect-btn {
     padding: 14px 30px;
     background: linear-gradient(135deg, #00ff00, #00ffaa);
@@ -125,7 +207,6 @@ body {
     font-family: "Jersey 10", sans-serif;
     cursor: pointer;
     transition: all 0.3s ease;
-    margin-top: 10px;
     text-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
 }
 
@@ -135,6 +216,29 @@ body {
 }
 
 .connect-btn:active {
+    transform: scale(0.98);
+}
+
+.save-btn {
+    padding: 14px 30px;
+    background: linear-gradient(135deg, #0088ff, #00d4ff);
+    border: none;
+    border-radius: 4px;
+    color: #000000;
+    font-size: 1.2em;
+    font-weight: bold;
+    font-family: "Jersey 10", sans-serif;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
+}
+
+.save-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
+}
+
+.save-btn:active {
     transform: scale(0.98);
 }
 
@@ -234,6 +338,23 @@ body {
     background: #00ffaa;
 }
 
+.connection-panel::-webkit-scrollbar {
+    width: 8px;
+}
+
+.connection-panel::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.3);
+}
+
+.connection-panel::-webkit-scrollbar-thumb {
+    background: rgba(0, 255, 0, 0.5);
+    border-radius: 4px;
+}
+
+.connection-panel::-webkit-scrollbar-thumb:hover {
+    background: #00ff00;
+}
+
 /* Responsive design */
 @media (max-width: 768px) {
     .connection-panel {
@@ -252,8 +373,24 @@ body {
         font-size: 0.95em;
     }
 
-    .connect-btn {
+    .connect-btn,
+    .save-btn {
         font-size: 1em;
+    }
+
+    .button-group {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .saved-connections-controls {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .saved-connections-select,
+    .action-btn {
+        width: 100%;
     }
 
     .radio-group {

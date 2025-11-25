@@ -12,7 +12,22 @@
     <div class="container">
         <!-- Connection Form -->
         <div class="connection-panel" id="connectionPanel">
-            <h1>SSH Connection</h1>
+            <h1>Keysocket - Online SSH</h1>
+            
+            <!-- Saved Connections Dropdown -->
+            <div class="saved-connections-section">
+                <div class="form-group">
+                    <label for="savedConnections">Saved Connections:</label>
+                    <div class="saved-connections-controls">
+                        <select id="savedConnections" class="saved-connections-select">
+                            <option value="">-- Select a saved connection --</option>
+                        </select>
+                        <button type="button" id="loadBtn" class="action-btn load-btn" title="Load selected connection">Load</button>
+                        <button type="button" id="deleteBtn" class="action-btn delete-btn" title="Delete selected connection">Delete</button>
+                    </div>
+                </div>
+            </div>
+
             <form id="connectionForm">
                 <div class="form-group">
                     <label for="host">Host:</label>
@@ -53,7 +68,15 @@
                     <textarea id="privateKey" name="privateKey" placeholder="Paste your private key here (PEM format)"></textarea>
                 </div>
 
-                <button type="submit" class="connect-btn">Connect</button>
+                <div class="form-group">
+                    <label for="connectionName">Connection Name (for saving):</label>
+                    <input type="text" id="connectionName" name="connectionName" placeholder="e.g., Production Server">
+                </div>
+
+                <div class="button-group">
+                    <button type="submit" class="connect-btn">Connect</button>
+                    <button type="button" id="saveBtn" class="save-btn">Save Connection</button>
+                </div>
             </form>
         </div>
 
