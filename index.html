@@ -3,95 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="/node_modules/@xterm/xterm/css/xterm.css">
-    <link rel="stylesheet" href="/css/style.css">
-    <script src="/node_modules/@xterm/xterm/lib/xterm.js"></script>
-    <title>Keysocket</title>
+    <link rel="stylesheet" href="node_modules/@xterm/xterm/css/xterm.css" />
+    <script src="node_modules/@xterm/xterm/lib/xterm.js"></script>
+    <title>Document</title>
 </head>
 <body>
-    <div class="container">
-        <!-- Connection Form -->
-        <div class="connection-panel" id="connectionPanel">
-            <h1>Keysocket - Online SSH</h1>
-            
-            <!-- Saved Connections Dropdown -->
-            <div class="saved-connections-section">
-                <div class="form-group">
-                    <label for="savedConnections">Saved Connections:</label>
-                    <div class="saved-connections-controls">
-                        <select id="savedConnections" class="saved-connections-select">
-                            <option value="">-- Select a saved connection --</option>
-                        </select>
-                        <button type="button" id="loadBtn" class="action-btn load-btn" title="Load selected connection">Load</button>
-                        <button type="button" id="deleteBtn" class="action-btn delete-btn" title="Delete selected connection">Delete</button>
-                    </div>
-                </div>
-            </div>
-
-            <form id="connectionForm">
-                <div class="form-group">
-                    <label for="host">Host:</label>
-                    <input type="text" id="host" name="host" placeholder="example.com" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="port">Port:</label>
-                    <input type="number" id="port" name="port" value="22" min="1" max="65535" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="username">Username:</label>
-                    <input type="text" id="username" name="username" placeholder="user" required>
-                </div>
-
-                <div class="form-group">
-                    <label>Authentication Method:</label>
-                    <div class="radio-group">
-                        <label class="radio-label">
-                            <input type="radio" name="authMethod" value="password" checked>
-                            Password
-                        </label>
-                        <label class="radio-label">
-                            <input type="radio" name="authMethod" value="key">
-                            Private Key
-                        </label>
-                    </div>
-                </div>
-
-                <div class="form-group" id="passwordGroup">
-                    <label for="password">Password:</label>
-                    <input type="password" id="password" name="password" placeholder="Enter password">
-                </div>
-
-                <div class="form-group" id="keyGroup" style="display: none;">
-                    <label for="privateKey">Private Key:</label>
-                    <textarea id="privateKey" name="privateKey" placeholder="Paste your private key here (PEM format)"></textarea>
-                </div>
-
-                <div class="form-group">
-                    <label for="connectionName">Connection Name (for saving):</label>
-                    <input type="text" id="connectionName" name="connectionName" placeholder="e.g., Production Server">
-                </div>
-
-                <div class="button-group">
-                    <button type="submit" class="connect-btn">Connect</button>
-                    <button type="button" id="saveBtn" class="save-btn">Save Connection</button>
-                </div>
-            </form>
-        </div>
-
-        <!-- Terminal -->
-        <div class="terminal-wrapper" id="terminalWrapper" style="display: none;">
-            <div class="terminal-header">
-                <span id="connectionInfo"></span>
-                <button id="disconnectBtn" class="disconnect-btn">Disconnect</button>
-            </div>
-            <div class="terminal-container">
-                <div class="terminal" id="terminal"></div>
-            </div>
-        </div>
-    </div>
-
-    <script src="/js/terminal.js"></script>
+    <div id="terminal"></div>
+    <script>
+        var term = new Terminal();
+        term.open(document.getElementById('terminal'));
+        term.write('Hello from \x1B[1;3;31mxterm.js\x1B[0m $ ')
+    </script>
 </body>
 </html>
