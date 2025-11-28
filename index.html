@@ -1,18 +1,52 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="node_modules/@xterm/xterm/css/xterm.css" />
-    <script src="node_modules/@xterm/xterm/lib/xterm.js"></script>
-    <title>Document</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>KeySocket — Web SSH for keysocket.eu</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/css@1.0.0/xterm.css" />
+    <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
-    <div id="terminal"></div>
-    <script>
-        var term = new Terminal();
-        term.open(document.getElementById('terminal'));
-        term.write('Hello from \x1B[1;3;31mxterm.js\x1B[0m $ ')
-    </script>
+    <div class="app">
+        <header class="topbar">
+            <h1>KeySocket</h1>
+            <div class="domain">keysocket.eu</div>
+        </header>
+
+        <main>
+            <section class="connect">
+                <form id="connect-form">
+                    <label>Host <input name="host" placeholder="example.com or 192.0.2.1" required></label>
+                    <label>Port <input name="port" type="number" value="22"></label>
+                    <label>Username <input name="username" required></label>
+                    <label>Auth
+                        <select id="auth-select" name="auth">
+                            <option value="password">Password</option>
+                            <option value="key">Private key</option>
+                        </select>
+                    </label>
+                    <label id="password-label">Password <input name="password" type="password"></label>
+                    <label id="key-label" style="display:none">Private key <input id="keyfile" type="file" accept="*/*"></label>
+                    <div class="actions">
+                        <button id="connect-btn" type="submit">Connect</button>
+                        <button id="disconnect-btn" type="button" disabled>Disconnect</button>
+                        <button id="save-conn" type="button">Save</button>
+                        <select id="saved-list"><option value="">Saved connections</option></select>
+                    </div>
+                </form>
+            </section>
+
+            <section class="terminal-area">
+                <div id="terminal" class="terminal"></div>
+            </section>
+        </main>
+
+        <footer class="footer">Secure web SSH gateway — run behind TLS and reverse proxy on <strong>keysocket.eu</strong></footer>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@xterm/lib@5.5.0/lib/xterm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.7.0/lib/xterm-addon-fit.js"></script>
+    <script src="js/app.js"></script>
 </body>
 </html>
