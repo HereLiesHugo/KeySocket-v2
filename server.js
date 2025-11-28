@@ -77,7 +77,10 @@ app.get('/health', (req, res) => res.json({ ok: true, env: process.env.NODE_ENV 
 app.post('/turnstile-verify', (req, res) => {
   const token = (req.body && req.body.token) || '';
   if (!token) return res.status(400).json({ ok: false, message: 'missing token' });
-  if (!TURNSTILE_SECRET) return res.status(500).json({ ok: false, message: 'server misconfigured: TURNSTILE_SECRET not set' });
+  if (!TURNSTILE_SECRET) {
+    console.error('TURNSTILE_SECRET not configured in environment');
+    return res.status(500).json({ ok: false, message: 'server misconfigured: TURNSTILE_SECRET not set' });
+  }
 
   // verify with Cloudflare
   const postData = `secret=${encodeURIComponent(TURNSTILE_SECRET)}&response=${encodeURIComponent(token)}&remoteip=${encodeURIComponent(req.socket.remoteAddress || '')}`;
@@ -88,26 +91,34 @@ app.post('/turnstile-verify', (req, res) => {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(postData) }
   };
 
+  console.log(`[Turnstile] Verifying token for IP ${req.socket.remoteAddress || 'unknown'}`);
   const req2 = https.request(options, (resp) => {
     let data = '';
     resp.on('data', (chunk) => { data += chunk.toString(); });
     resp.on('end', () => {
       try {
           const parsed = JSON.parse(data);
+          console.log(`[Turnstile] Cloudflare response: success=${parsed.success}, error-codes=${JSON.stringify(parsed['error-codes'] || [])}`);
           if (parsed && parsed.success) {
             // generate a server-side one-time token and store that (do NOT return the Cloudflare token)
             const serverToken = require('crypto').randomBytes(24).toString('hex');
             storeVerifiedToken(serverToken, req.socket.remoteAddress || '');
+            console.log(`[Turnstile] Verification successful, issued server token`);
             return res.json({ ok: true, token: serverToken, ttl: TURNSTILE_TOKEN_TTL_MS });
           }
+          console.warn(`[Turnstile] Verification failed: ${JSON.stringify(parsed)}`);
           return res.status(400).json({ ok: false, message: 'verification failed', details: parsed });
       } catch (e) {
+        console.error(`[Turnstile] Failed to parse Cloudflare response: ${e.message}`);
         return res.status(500).json({ ok: false, message: 'invalid response from turnstile' });
       }
     });
   });
 
-  req2.on('error', (err) => { console.error('turnstile verify error', err); res.status(500).json({ ok: false, message: 'verification error' }); });
+  req2.on('error', (err) => { 
+    console.error('[Turnstile] Request error:', err.message); 
+    res.status(500).json({ ok: false, message: 'verification error' }); 
+  });
   req2.write(postData);
   req2.end();
 });
