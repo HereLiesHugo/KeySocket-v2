@@ -9,6 +9,7 @@ const { WebSocketServer } = require('ws');
 const https = require('https');
 const http = require('http');
 const { Client } = require('ssh2');
+const { URL } = require('url');
 
 const app = express();
 
@@ -39,6 +40,45 @@ app.use(express.static(publicDir));
 
 app.get('/health', (req, res) => res.json({ ok: true, env: process.env.NODE_ENV || 'development' }));
 
+// Turnstile verification endpoint - accepts a client token and verifies with Cloudflare
+app.post('/turnstile-verify', (req, res) => {
+  const token = (req.body && req.body.token) || '';
+  if (!token) return res.status(400).json({ ok: false, message: 'missing token' });
+  if (!TURNSTILE_SECRET) return res.status(500).json({ ok: false, message: 'server misconfigured: TURNSTILE_SECRET not set' });
+
+  // verify with Cloudflare
+  const postData = `secret=${encodeURIComponent(TURNSTILE_SECRET)}&response=${encodeURIComponent(token)}&remoteip=${encodeURIComponent(req.socket.remoteAddress || '')}`;
+  const options = {
+    hostname: 'challenges.cloudflare.com',
+    path: '/turnstile/v0/siteverify',
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(postData) }
+  };
+
+  const req2 = https.request(options, (resp) => {
+    let data = '';
+    resp.on('data', (chunk) => { data += chunk.toString(); });
+    resp.on('end', () => {
+      try {
+          const parsed = JSON.parse(data);
+          if (parsed && parsed.success) {
+            // generate a server-side one-time token and store that (do NOT return the Cloudflare token)
+            const serverToken = require('crypto').randomBytes(24).toString('hex');
+            storeVerifiedToken(serverToken, req.socket.remoteAddress || '');
+            return res.json({ ok: true, token: serverToken, ttl: TURNSTILE_TOKEN_TTL_MS });
+          }
+          return res.status(400).json({ ok: false, message: 'verification failed', details: parsed });
+      } catch (e) {
+        return res.status(500).json({ ok: false, message: 'invalid response from turnstile' });
+      }
+    });
+  });
+
+  req2.on('error', (err) => { console.error('turnstile verify error', err); res.status(500).json({ ok: false, message: 'verification error' }); });
+  req2.write(postData);
+  req2.end();
+});
+
 // Create underlying server (HTTPS if TLS available and configured)
 let server;
 if (USE_TLS && fs.existsSync(TLS_KEY) && fs.existsSync(TLS_CERT)) {
@@ -57,6 +97,34 @@ const wss = new WebSocketServer({ server, path: '/ssh', maxPayload: 2 * 1024 * 1
 // Simple per-IP concurrent session limit
 const CONCURRENT_PER_IP = parseInt(process.env.CONCURRENT_PER_IP || '5', 10);
 const ipSessions = new Map();
+
+// Cloudflare Turnstile config
+const TURNSTILE_SECRET = process.env.TURNSTILE_SECRET || '';
+const TURNSTILE_TOKEN_TTL_MS = parseInt(process.env.TURNSTILE_TOKEN_TTL_MS || String(30 * 1000), 10);
+
+// one-time verified tokens (keyed by the turnstile response token)
+const verifiedTokens = new Map(); // token -> { ip, expires }
+
+function storeVerifiedToken(token, ip) {
+  const expires = Date.now() + TURNSTILE_TOKEN_TTL_MS;
+  verifiedTokens.set(token, { ip, expires });
+}
+
+function consumeVerifiedToken(token, ip) {
+  const info = verifiedTokens.get(token);
+  if (!info) return false;
+  // If stored with an IP, ensure match (optional)
+  if (info.ip && ip && info.ip !== ip) return false;
+  if (info.expires < Date.now()) { verifiedTokens.delete(token); return false; }
+  verifiedTokens.delete(token);
+  return true;
+}
+
+// cleanup expired tokens periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [t, info] of verifiedTokens.entries()) if (info.expires < now) verifiedTokens.delete(t);
+}, 5000);
 
 function incrIp(ip) {
   const n = (ipSessions.get(ip) || 0) + 1;
@@ -77,6 +145,20 @@ function safeParseJson(message) {
 // Each ws connection may bootstrap an SSH client
 wss.on('connection', (ws, req) => {
   const ip = req.socket.remoteAddress || 'unknown';
+  // require a one-time Turnstile token passed as query param `ts`
+  try {
+    const fullUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+    const ts = fullUrl.searchParams.get('ts');
+    if (!ts || !consumeVerifiedToken(ts, ip)) {
+      ws.send(JSON.stringify({ type: 'error', message: 'Turnstile verification required' }));
+      ws.close();
+      return;
+    }
+  } catch (e) {
+    ws.send(JSON.stringify({ type: 'error', message: 'Invalid connection parameters' }));
+    ws.close();
+    return;
+  }
   const concurrent = incrIp(ip);
   if (concurrent > CONCURRENT_PER_IP) {
     ws.send(JSON.stringify({ type: 'error', message: 'Too many concurrent sessions from your IP' }));

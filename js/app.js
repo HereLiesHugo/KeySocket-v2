@@ -26,6 +26,10 @@
 
   let socket = null;
   let privateKeyText = null;
+  let ksTurnstileToken = null;
+  let ksTurnstileVerifiedAt = 0;
+  let ksTurnstileTTL = 0;
+  let ksTurnstileWidgetId = null;
 
   function setAuthUI() {
     if (authSelect.value === 'password') {
@@ -53,7 +57,9 @@
   function wsUrl() {
     const loc = window.location;
     const protocol = loc.protocol === 'https:' ? 'wss:' : 'ws:';
-    return protocol + '//' + loc.host + '/ssh';
+    let url = protocol + '//' + loc.host + '/ssh';
+    if (ksTurnstileToken) url += '?ts=' + encodeURIComponent(ksTurnstileToken);
+    return url;
   }
 
   function saveConnection() {
@@ -95,6 +101,15 @@
     if (socket) return;
     term.clear();
     term.focus();
+
+    // ensure we have a fresh server-issued token
+    const now = Date.now();
+    if (!ksTurnstileToken || (ksTurnstileTTL && (now > (ksTurnstileVerifiedAt + ksTurnstileTTL - 2000)))) {
+      // token missing or expired (with 2s safety margin) -> re-run Turnstile
+      reRunTurnstile();
+      term.writeln('\r\n[INFO] Turnstile token missing or expired; please complete verification.');
+      return;
+    }
 
     socket = new WebSocket(wsUrl());
     socket.binaryType = 'arraybuffer';
@@ -171,6 +186,77 @@
 
   form.addEventListener('submit', connect);
   disconnectBtn.addEventListener('click', disconnect);
+
+  // Turnstile handling on site enter
+  function onTurnstileToken(token) {
+    if (!token) return;
+    // send token to server for verification and one-time storage
+    fetch('/turnstile-verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token })
+    }).then(r => r.json()).then(j => {
+      if (j && j.ok && j.token) {
+        // store the server-issued one-time token (do NOT keep the Cloudflare token)
+        ksTurnstileToken = j.token;
+        ksTurnstileTTL = parseInt(j.ttl || '30000', 10) || 30000;
+        ksTurnstileVerifiedAt = Date.now();
+        const ov = document.getElementById('turnstile-overlay');
+        if (ov) ov.style.display = 'none';
+        try { connectBtn.disabled = false; } catch (e) {}
+      } else {
+        // leave overlay visible and let user try again
+        console.warn('Turnstile verify failed', j);
+      }
+    }).catch(err => console.error('turnstile verify error', err));
+  }
+
+  function initTurnstile() {
+    try {
+      // disable connect until verified
+      connectBtn.disabled = true;
+      if (window.turnstile && document.getElementById('turnstile-widget')) {
+        // store widget id so we can reset/re-run the challenge later
+        try { ksTurnstileWidgetId = window.turnstile.render('#turnstile-widget', { sitekey: '0x4AAAAAACDdgapByiL54XqC', callback: onTurnstileToken }); } catch (e) { ksTurnstileWidgetId = null; }
+      } else {
+        // if the library hasn't loaded yet, poll briefly
+        let tries = 0;
+        const t = setInterval(() => {
+          tries += 1;
+          if (window.turnstile && document.getElementById('turnstile-widget')) {
+            clearInterval(t);
+            try { ksTurnstileWidgetId = window.turnstile.render('#turnstile-widget', { sitekey: '0x4AAAAAACDdgapByiL54XqC', callback: onTurnstileToken }); } catch (e) { ksTurnstileWidgetId = null; }
+          } else if (tries > 20) {
+            clearInterval(t);
+            console.warn('Turnstile did not load');
+            // allow connect as fallback after a delay
+            connectBtn.disabled = false;
+            const ov = document.getElementById('turnstile-overlay');
+            if (ov) ov.style.display = 'none';
+          }
+        }, 300);
+      }
+    } catch (e) { console.error('initTurnstile', e); }
+  }
+
+  function reRunTurnstile() {
+    // show the overlay and reset or re-render the widget to prompt the user
+    const ov = document.getElementById('turnstile-overlay');
+    if (ov) ov.style.display = 'flex';
+    try {
+      if (window.turnstile) {
+        if (ksTurnstileWidgetId) {
+          try { window.turnstile.reset(ksTurnstileWidgetId); } catch (e) { /* fallback */ ksTurnstileWidgetId = window.turnstile.render('#turnstile-widget', { sitekey: '0x4AAAAAACDdgapByiL54XqC', callback: onTurnstileToken }); }
+        } else {
+          ksTurnstileWidgetId = window.turnstile.render('#turnstile-widget', { sitekey: '0x4AAAAAACDdgapByiL54XqC', callback: onTurnstileToken });
+        }
+      }
+    } catch (e) { console.error('reRunTurnstile', e); }
+  }
+
+  // initialize on DOM ready
+  if (document.readyState === 'complete' || document.readyState === 'interactive') initTurnstile();
+  else window.addEventListener('DOMContentLoaded', initTurnstile);
 
   // expose minimal helpers
   window.KeySocket = { connect, disconnect, terminal: term };

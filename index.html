@@ -45,8 +45,18 @@
         <footer class="footer">Secure web SSH gateway — run behind TLS and reverse proxy on <strong>keysocket.eu</strong></footer>
     </div>
 
+    <!-- Turnstile overlay shown on initial site enter until verified -->
+    <div id="turnstile-overlay" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);z-index:9999;">
+        <div style="background:#fff;padding:24px;border-radius:8px;max-width:420px;width:90%;text-align:center;">
+            <h3>Verify you're human</h3>
+            <p>Please complete the verification to continue using KeySocket.</p>
+            <div id="turnstile-widget"></div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/@xterm/lib@5.5.0/lib/xterm.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.7.0/lib/xterm-addon-fit.js"></script>
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
     <script src="js/app.js"></script>
 </body>
 </html>
