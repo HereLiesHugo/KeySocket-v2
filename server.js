@@ -20,7 +20,18 @@ const TLS_KEY = process.env.TLS_KEY || '/etc/letsencrypt/live/keysocket.eu/privk
 const TLS_CERT = process.env.TLS_CERT || '/etc/letsencrypt/live/keysocket.eu/fullchain.pem';
 
 // Basic security
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "https://challenges.cloudflare.com"],
+      frameSrc: ["https://challenges.cloudflare.com"],
+      connectSrc: ["'self'", "https://challenges.cloudflare.com"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+      fontSrc: ["'self'", "https://cdn.jsdelivr.net"],
+    }
+  }
+}));
 app.use(express.json({ limit: '200kb' }));
 app.use(express.urlencoded({ extended: false }));
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));

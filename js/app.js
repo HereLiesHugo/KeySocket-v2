@@ -217,24 +217,10 @@
       connectBtn.disabled = true;
       if (window.turnstile && document.getElementById('turnstile-widget')) {
         // store widget id so we can reset/re-run the challenge later
-        try { ksTurnstileWidgetId = window.turnstile.render('#turnstile-widget', { sitekey: '0x4AAAAAACDdgapByiL54XqC', callback: onTurnstileToken }); } catch (e) { ksTurnstileWidgetId = null; }
+        try { ksTurnstileWidgetId = window.turnstile.render('#turnstile-widget', { sitekey: '0x4AAAAAACDdgapByiL54XqC', callback: onTurnstileToken }); } catch (e) { console.error('turnstile render error', e); ksTurnstileWidgetId = null; }
       } else {
-        // if the library hasn't loaded yet, poll briefly
-        let tries = 0;
-        const t = setInterval(() => {
-          tries += 1;
-          if (window.turnstile && document.getElementById('turnstile-widget')) {
-            clearInterval(t);
-            try { ksTurnstileWidgetId = window.turnstile.render('#turnstile-widget', { sitekey: '0x4AAAAAACDdgapByiL54XqC', callback: onTurnstileToken }); } catch (e) { ksTurnstileWidgetId = null; }
-          } else if (tries > 20) {
-            clearInterval(t);
-            console.warn('Turnstile did not load');
-            // allow connect as fallback after a delay
-            connectBtn.disabled = false;
-            const ov = document.getElementById('turnstile-overlay');
-            if (ov) ov.style.display = 'none';
-          }
-        }, 300);
+        console.warn('Turnstile library not ready or widget element missing');
+        connectBtn.disabled = false;
       }
     } catch (e) { console.error('initTurnstile', e); }
   }
