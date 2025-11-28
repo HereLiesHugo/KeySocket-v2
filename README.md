@@ -2,6 +2,8 @@
 
 This repository contains a minimal production-ready web SSH gateway using xterm.js for the browser and `ssh2` + `ws` on the server. It is prepared for deployment at the domain `keysocket.eu`.
 
+https://keysocket.eu/
+
 Important: forwarding private keys or passwords through the gateway has security implications. Prefer running this service behind a secure reverse proxy (Nginx) with TLS, and read the deployment notes below.
 
 Quick start (development)
