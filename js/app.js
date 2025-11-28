@@ -257,11 +257,28 @@
           connectBtn.disabled = false;
         }
       } else {
-        // turnstile library not loaded yet — show helpful hint and allow retry
+        // turnstile library not loaded yet — attempt to load it dynamically and show helpful hint
         console.warn('Turnstile library not ready');
-        widgetEl.innerHTML = `<div style="color:#b00">Verification library not loaded.<br/><button id=\"turnstile-retry\">Retry</button></div>`;
+        widgetEl.innerHTML = `<div style="color:#b00">Verification library not loaded.<br/><div id=\"turnstile-load-status\">Attempting to load...</div><button id=\"turnstile-retry\">Retry</button></div>`;
+        const statusEl = document.getElementById('turnstile-load-status');
         const btn2 = document.getElementById('turnstile-retry');
-        if (btn2) btn2.addEventListener('click', () => { widgetEl.innerHTML = ''; initTurnstile(); });
+        const loadScript = () => {
+          try {
+            if (statusEl) statusEl.textContent = 'Loading Turnstile library...';
+            // create script element to load the library (will respect CSP)
+            const s = document.createElement('script');
+            s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?onload=ksInitTurnstile&render=explicit';
+            s.async = true; s.defer = true;
+            s.onload = () => { if (statusEl) statusEl.textContent = 'Loaded, initializing...'; try { if (window.ksInitTurnstile) window.ksInitTurnstile(); } catch (e) {} };
+            s.onerror = (ev) => { if (statusEl) statusEl.textContent = 'Failed to load library. Check console and network. CSP may be blocking external scripts.'; console.error('Turnstile script load error', ev); };
+            document.head.appendChild(s);
+            // give a timeout if nothing happens
+            setTimeout(() => { if (!window.turnstile && statusEl && statusEl.textContent.indexOf('Failed') === -1) statusEl.textContent = 'Still loading — check network/CSP and retry.'; }, 4000);
+          } catch (e) { console.error('dynamic load failed', e); if (statusEl) statusEl.textContent = 'Dynamic loader failed'; }
+        };
+        if (btn2) btn2.addEventListener('click', () => { widgetEl.innerHTML = ''; loadScript(); });
+        // try once automatically
+        loadScript();
         connectBtn.disabled = false;
       }
     } catch (e) { console.error('initTurnstile', e); }
