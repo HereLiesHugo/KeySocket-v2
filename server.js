@@ -170,6 +170,9 @@ wss.on('connection', (ws, req) => {
   let sshClient = null;
   let sshStream = null;
   let alive = true;
+  // attach placeholders to ws so shutdown can access them
+  ws._sshClient = null;
+  ws._sshStream = null;
 
   // keepalive
   ws.isAlive = true;
@@ -192,6 +195,7 @@ wss.on('connection', (ws, req) => {
 
         // Create ssh client
         sshClient = new Client();
+        ws._sshClient = sshClient;
         const connectOpts = {
           host: host,
           port: parseInt(port || '22', 10),
@@ -225,6 +229,7 @@ wss.on('connection', (ws, req) => {
               return;
             }
             sshStream = stream;
+            ws._sshStream = stream;
             stream.on('data', (data) => {
               // send raw binary data back to client
               try { ws.send(data); } catch (e) {}
@@ -280,5 +285,36 @@ server.listen(PORT, HOST, () => {
   console.log(`Server listening on ${HOST}:${PORT} (ENV=${process.env.NODE_ENV || 'development'})`);
 });
 
-// graceful shutdown
-process.on('SIGINT', () => { console.log('SIGINT, closing'); server.close(() => process.exit(0)); });
+// graceful shutdown: close websockets, end SSH clients, then close HTTP server
+function gracefulShutdown(signal) {
+  console.log(`${signal} received, shutting down gracefully...`);
+  try {
+    // stop accepting new connections
+    server.close(() => { console.log('HTTP server closed'); });
+  } catch (e) { console.warn('error closing server', e); }
+
+  try {
+    // close websocket server and all clients
+    wss.clients.forEach((ws) => {
+      try {
+        if (ws._sshStream && typeof ws._sshStream.end === 'function') {
+          try { ws._sshStream.end(); } catch (e) {}
+        }
+        if (ws._sshClient && typeof ws._sshClient.end === 'function') {
+          try { ws._sshClient.end(); } catch (e) {}
+        }
+        try { ws.close(); } catch (e) { try { ws.terminate(); } catch (e2) {} }
+      } catch (e) { /* ignore per-client errors */ }
+    });
+    try { wss.close(() => { console.log('WebSocket server closed'); }); } catch (e) { console.warn('error closing wss', e); }
+  } catch (e) { console.warn('error during websocket shutdown', e); }
+
+  // give a short grace period then exit
+  setTimeout(() => {
+    console.log('Shutdown complete, exiting');
+    process.exit(0);
+  }, 3000);
+}
+
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
