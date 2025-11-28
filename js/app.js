@@ -215,11 +215,33 @@
     try {
       // disable connect until verified
       connectBtn.disabled = true;
-      if (window.turnstile && document.getElementById('turnstile-widget')) {
-        // store widget id so we can reset/re-run the challenge later
-        try { ksTurnstileWidgetId = window.turnstile.render('#turnstile-widget', { sitekey: '0x4AAAAAACDdgapByiL54XqC', callback: onTurnstileToken }); } catch (e) { console.error('turnstile render error', e); ksTurnstileWidgetId = null; }
+      const widgetEl = document.getElementById('turnstile-widget');
+      console.debug('initTurnstile:', { turnstile: !!window.turnstile, widgetEl });
+      if (!widgetEl) {
+        console.error('Turnstile widget container not found');
+        connectBtn.disabled = false;
+        return;
+      }
+
+      if (window.turnstile) {
+        try {
+          ksTurnstileWidgetId = window.turnstile.render('#turnstile-widget', { sitekey: '0x4AAAAAACDdgapByiL54XqC', callback: onTurnstileToken });
+          console.info('Turnstile render invoked, widgetId=', ksTurnstileWidgetId);
+        } catch (e) {
+          console.error('turnstile render error', e);
+          ksTurnstileWidgetId = null;
+          // show user-friendly error and retry button
+          widgetEl.innerHTML = `<div style="color:#b00">Failed to load verification widget.<br/><button id=\"turnstile-retry\">Retry</button></div>`;
+          const btn = document.getElementById('turnstile-retry');
+          if (btn) btn.addEventListener('click', () => { widgetEl.innerHTML = ''; initTurnstile(); });
+          connectBtn.disabled = false;
+        }
       } else {
-        console.warn('Turnstile library not ready or widget element missing');
+        // turnstile library not loaded yet — show helpful hint and allow retry
+        console.warn('Turnstile library not ready');
+        widgetEl.innerHTML = `<div style="color:#b00">Verification library not loaded.<br/><button id=\"turnstile-retry\">Retry</button></div>`;
+        const btn2 = document.getElementById('turnstile-retry');
+        if (btn2) btn2.addEventListener('click', () => { widgetEl.innerHTML = ''; initTurnstile(); });
         connectBtn.disabled = false;
       }
     } catch (e) { console.error('initTurnstile', e); }
