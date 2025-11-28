@@ -50,6 +50,7 @@
   let ksTurnstileVerifiedAt = 0;
   let ksTurnstileTTL = 0;
   let ksTurnstileWidgetId = null;
+  let ksTurnstileRendered = false;
 
   function setAuthUI() {
     if (authSelect.value === 'password') {
@@ -216,6 +217,7 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token })
     }).then(r => r.json()).then(j => {
+      console.debug('turnstile verify response', j);
       if (j && j.ok && j.token) {
         // store the server-issued one-time token (do NOT keep the Cloudflare token)
         ksTurnstileToken = j.token;
@@ -224,9 +226,17 @@
         const ov = document.getElementById('turnstile-overlay');
         if (ov) ov.style.display = 'none';
         try { connectBtn.disabled = false; } catch (e) {}
+        // clean up widget to avoid duplicate renders later
+        try {
+          const widgetEl = document.getElementById('turnstile-widget');
+          if (widgetEl) { widgetEl.innerHTML = ''; delete widgetEl.dataset.turnstileRendered; }
+          ksTurnstileWidgetId = null;
+          ksTurnstileRendered = false;
+        } catch (e) {}
       } else {
-        // leave overlay visible and let user try again
+        // leave overlay visible and let user try again; show details
         console.warn('Turnstile verify failed', j);
+        try { console.warn('Turnstile verify details:', JSON.stringify(j)); } catch (e) {}
       }
     }).catch(err => console.error('turnstile verify error', err));
   }
@@ -243,9 +253,20 @@
         return;
       }
 
+      // Prevent double-rendering
+      if (widgetEl.dataset && widgetEl.dataset.turnstileRendered === '1') {
+        console.info('Turnstile already rendered in container; skipping render');
+        ksTurnstileRendered = true;
+        return;
+      }
+
       if (window.turnstile) {
         try {
+          // clear any placeholder content, then render once
+          widgetEl.innerHTML = '';
           ksTurnstileWidgetId = window.turnstile.render('#turnstile-widget', { sitekey: '0x4AAAAAACDdgapByiL54XqC', callback: onTurnstileToken });
+          ksTurnstileRendered = true;
+          if (widgetEl.dataset) widgetEl.dataset.turnstileRendered = '1';
           console.info('Turnstile render invoked, widgetId=', ksTurnstileWidgetId);
         } catch (e) {
           console.error('turnstile render error', e);
