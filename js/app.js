@@ -4,8 +4,8 @@
  * NOTE: Sending private keys through the network has security implications.
  */
 (function () {
-  const { Terminal } = window.Terminal || window;
-  const FitAddon = window.FitAddon && window.FitAddon.FitAddon ? window.FitAddon.FitAddon : window.FitAddon;
+  const Terminal = window.Terminal || null;
+  const FitAddon = (window.FitAddon && (window.FitAddon.FitAddon || window.FitAddon)) || null;
 
   const termEl = document.getElementById('terminal');
   const form = document.getElementById('connect-form');
@@ -18,11 +18,31 @@
   const saveBtn = document.getElementById('save-conn');
   const savedList = document.getElementById('saved-list');
 
-  const term = new Terminal({ cursorBlink: true });
-  const fit = new FitAddon.FitAddon();
-  term.loadAddon(fit);
-  term.open(termEl);
-  fit.fit();
+  let term;
+  let fit;
+  if (Terminal && typeof Terminal === 'function') {
+    term = new Terminal({ cursorBlink: true });
+    if (FitAddon && (typeof FitAddon === 'function' || typeof FitAddon === 'object')) {
+      try { fit = new (FitAddon.FitAddon || FitAddon)(); } catch (e) { fit = new FitAddon(); }
+      try { term.loadAddon(fit); } catch (e) { /* ignore addon load errors */ }
+    }
+    try { term.open(termEl); } catch (e) { console.error('term.open failed', e); }
+    try { if (fit && typeof fit.fit === 'function') fit.fit(); } catch (e) {}
+  } else {
+    // graceful fallback: create a minimal stub so rest of UI doesn't crash
+    console.error('xterm Terminal constructor not found on window');
+    term = {
+      write: (s) => { if (termEl) termEl.textContent += s; },
+      writeln: (s) => { if (termEl) termEl.textContent += s + '\n'; },
+      onData: () => {},
+      open: () => {},
+      focus: () => {},
+      cols: 80,
+      rows: 24,
+      loadAddon: () => {}
+    };
+    if (termEl) termEl.textContent = '\n[Terminal not available: xterm.js failed to load]\n';
+  }
 
   let socket = null;
   let privateKeyText = null;
