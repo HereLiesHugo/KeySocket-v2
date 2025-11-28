@@ -47,7 +47,28 @@ app.use(limiter);
 
 // Serve static frontend
 const publicDir = path.join(__dirname);
-app.use(express.static(publicDir));
+// Serve static files but don't auto-serve index.html so we can inject asset version
+app.use(express.static(publicDir, { index: false }));
+
+// Asset version for cache-busting: use env `ASSET_VERSION`, package.json version, or timestamp
+const ASSET_VERSION = process.env.ASSET_VERSION || (() => {
+  try { return require(path.join(__dirname, 'package.json')).version || String(Date.now()); } catch (e) { return String(Date.now()); }
+})();
+
+function serveIndex(req, res) {
+  try {
+    const indexPath = path.join(__dirname, 'index.html');
+    let html = fs.readFileSync(indexPath, 'utf8');
+    html = html.replace(/__ASSET_VERSION__/g, ASSET_VERSION);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.send(html);
+  } catch (e) {
+    return res.status(500).send('Server error');
+  }
+}
+
+app.get('/', serveIndex);
+app.get('/index.html', serveIndex);
 
 app.get('/health', (req, res) => res.json({ ok: true, env: process.env.NODE_ENV || 'development' }));
 
