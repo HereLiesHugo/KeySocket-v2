@@ -1,5 +1,7 @@
 # KeySocket — Web SSH gateway (xterm.js)
 
+I really just think there aren't enough good, free, web-based ssh clients out there, so thats why this project exists.
+
 This repository contains a minimal production-ready web SSH gateway using xterm.js for the browser and `ssh2` + `ws` on the server. It is prepared for deployment at the domain `keysocket.eu`.
 
 https://keysocket.eu/
@@ -22,42 +24,6 @@ Production deploy notes (keysocket.eu)
 
 - Recommended: run behind an Nginx reverse proxy that terminates TLS for `keysocket.eu` and proxies `/ssh` WebSocket connections to the internal port (3000). This keeps Node behind a hardened proxy and allows easy LetsEncrypt automation.
 - Alternatively set `USE_TLS=true` and configure `TLS_KEY` and `TLS_CERT` to point to your certificate and key (e.g. from certbot). Running Node directly with TLS is supported but less flexible.
-
-Systemd unit example (behind proxy):
-
-```ini
-[Unit]
-Description=KeySocket Web SSH Gateway
-After=network.target
-
-[Service]
-Environment=NODE_ENV=production
-WorkingDirectory=/srv/keysocket
-ExecStart=/usr/bin/node server.js
-Restart=on-failure
-User=www-data
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Reverse proxy (Nginx) snippet for websockets:
-
-```nginx
-server {
-  server_name keysocket.eu;
-
-  location / {
-    proxy_pass http://127.0.0.1:3000;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-  }
-}
-```
 
 Security & hardening
 
