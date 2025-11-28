@@ -53,6 +53,20 @@ const publicDir = path.join(__dirname);
 // Serve static files but don't auto-serve index.html so we can inject asset version
 app.use(express.static(publicDir, { index: false }));
 
+// Serve xterm libraries from node_modules (with proper MIME types)
+app.get('/lib/xterm.css', (req, res) => {
+  res.setHeader('Content-Type', 'text/css; charset=utf-8');
+  res.sendFile(path.join(__dirname, 'node_modules/@xterm/xterm/css/xterm.css'));
+});
+app.get('/lib/xterm.js', (req, res) => {
+  res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+  res.sendFile(path.join(__dirname, 'node_modules/@xterm/xterm/lib/xterm.js'));
+});
+app.get('/lib/xterm-addon-fit.js', (req, res) => {
+  res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+  res.sendFile(path.join(__dirname, 'node_modules/@xterm/addon-fit/lib/xterm-addon-fit.js'));
+});
+
 // Asset version for cache-busting: use env `ASSET_VERSION`, package.json version, or timestamp
 const ASSET_VERSION = process.env.ASSET_VERSION || (() => {
   try { return require(path.join(__dirname, 'package.json')).version || String(Date.now()); } catch (e) { return String(Date.now()); }
