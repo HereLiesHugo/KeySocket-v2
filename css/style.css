@@ -547,7 +547,7 @@ main {
 
 @media (max-width: 1279px) {
   .keyboard-container {
-    display: block; /* Hide keyboard when app management is open on mobile */
+    display: block; /* Show keyboard on mobile */
   }
 
   .app-management-grid {
