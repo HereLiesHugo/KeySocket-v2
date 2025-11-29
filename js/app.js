@@ -23,7 +23,13 @@
   let term;
   let fit;
   if (Terminal && typeof Terminal === 'function') {
-    term = new Terminal({ cursorBlink: true });
+    term = new Terminal({ 
+      cursorBlink: true,
+      fontFamily: "'Courier New', Courier, monospace",
+      fontSize: 13,
+      lineHeight: 1.2,
+      letterSpacing: 0
+    });
     if (FitAddon && (typeof FitAddon === 'function' || typeof FitAddon === 'object')) {
       try { fit = new (FitAddon.FitAddon || FitAddon)(); } catch (e) { fit = new FitAddon(); }
       try { term.loadAddon(fit); } catch (e) { /* ignore addon load errors */ }
