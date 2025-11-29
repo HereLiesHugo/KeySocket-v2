@@ -243,6 +243,7 @@
     let ksTurnstileTTL = 0;
     let ksTurnstileWidgetId = null;
     let ksTurnstileRendered = false;
+    let ksIsAuthenticated = false;
 
     function setAuthUI() {
         if (!authSelect) return;
@@ -488,11 +489,13 @@
                     credentials: 'same-origin'
                 }).then(r => r.json()).then(data => {
                     console.log('Auth status check:', data);
-                    if (data.authenticated) {
-                        // User is already authenticated, hide Turnstile overlay and enable connect
+                    ksIsAuthenticated = !!(data && data.authenticated);
+                    if (ksIsAuthenticated) {
                         const ov = document.getElementById('turnstile-overlay');
                         if (ov) ov.style.display = 'none';
                         if (connectBtn) connectBtn.disabled = false;
+                        // prevent Cloudflare script from re-initializing Turnstile when already authenticated
+                        try { window.ksInitTurnstile = function () {}; } catch (e) {}
                         console.log('User authenticated, skipping Turnstile');
                     } else {
                         // User not authenticated, show Turnstile
@@ -508,6 +511,7 @@
     // Turnstile handling on site enter
     function onTurnstileToken(token) {
         if (!token) return;
+        if (ksIsAuthenticated) return;
         // send token to server for verification and redirect to OAuth
         fetch('/turnstile-verify', {
             method: 'POST',
@@ -540,6 +544,7 @@
     }
 
     function initTurnstile() {
+        if (ksIsAuthenticated) return;
         try {
             // disable connect until verified
             if (connectBtn) connectBtn.disabled = true;
@@ -608,6 +613,7 @@
     }
 
     function reRunTurnstile() {
+        if (ksIsAuthenticated) return;
         // show the overlay and reset or re-render the widget to prompt the user
         const ov = document.getElementById('turnstile-overlay');
         if (ov) ov.style.display = 'flex';
