@@ -293,13 +293,6 @@ function safeParseJson(message) {
 wss.on('connection', (ws, req) => {
   const ip = req.socket.remoteAddress || 'unknown';
 
-  // Check OAuth authentication (instead of Turnstile)
-  if (!req.session || !req.session.passport || !req.session.passport.user) {
-    ws.send(JSON.stringify({ type: 'error', message: 'Authentication required. Please log in with Google.' }));
-    ws.close();
-    return;
-  }
-
   const concurrent = incrIp(ip);
   if (concurrent > CONCURRENT_PER_IP) {
     ws.send(JSON.stringify({ type: 'error', message: 'Too many concurrent sessions from your IP' }));
