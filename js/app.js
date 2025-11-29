@@ -380,13 +380,15 @@
         try { term.clear(); } catch (e) {}
         try { term.focus(); } catch (e) {}
 
-        // ensure we have a fresh server-issued token
-        const now = Date.now();
-        if (!ksTurnstileToken || (ksTurnstileTTL && (now > (ksTurnstileVerifiedAt + ksTurnstileTTL - 2000)))) {
-            // token missing or expired (with 2s safety margin) -> re-run Turnstile
-            reRunTurnstile();
-            try { term.writeln('\r\n[INFO] Turnstile token missing or expired; please complete verification.'); } catch (e) {}
-            return;
+        // If not yet authenticated via Google OAuth, enforce a fresh Turnstile token
+        if (!ksIsAuthenticated) {
+            const now = Date.now();
+            if (!ksTurnstileToken || (ksTurnstileTTL && (now > (ksTurnstileVerifiedAt + ksTurnstileTTL - 2000)))) {
+                // token missing or expired (with 2s safety margin) -> re-run Turnstile
+                reRunTurnstile();
+                try { term.writeln('\r\n[INFO] Turnstile token missing or expired; please complete verification.'); } catch (e) {}
+                return;
+            }
         }
 
         socket = new WebSocket(wsUrl());
