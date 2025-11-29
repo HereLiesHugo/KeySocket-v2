@@ -84,7 +84,7 @@
     }
   });
 
-  window.addEventListener('resize', () => { try { fit.fit(); } catch (e) {} });
+
 
   keyfileInput.addEventListener('change', (e) => {
     const f = e.target.files[0];
@@ -212,7 +212,16 @@
       const rows = term.rows;
       socket.send(JSON.stringify({ type: 'resize', cols, rows }));
     }
-    window.addEventListener('resize', () => { fit.fit(); sendResize(); });
+    function doResize() {
+      if (fit && typeof fit.fit === 'function') {
+        try { fit.fit(); } catch (e) { console.error('fit.fit error:', e); }
+      }
+      sendResize();
+    }
+    window.addEventListener('resize', doResize);
+    // Watch for terminal-area resizing
+    const resizeObserver = new ResizeObserver(() => { doResize(); });
+    resizeObserver.observe(terminalArea);
     setTimeout(sendResize, 250);
   }
 
