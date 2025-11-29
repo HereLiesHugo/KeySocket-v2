@@ -64,7 +64,7 @@ app.get('/lib/xterm.js', (req, res) => {
 });
 app.get('/lib/xterm-addon-fit.js', (req, res) => {
   res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-  res.sendFile(path.join(__dirname, 'node_modules/@xterm/addon-fit/lib/xterm-addon-fit.js'));
+  res.sendFile(path.join(__dirname, 'node_modules/@xterm/addon-fit/lib/addon-fit.js'));
 });
 
 // Asset version for cache-busting: use env `ASSET_VERSION`, package.json version, or timestamp
