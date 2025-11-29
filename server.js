@@ -85,10 +85,17 @@ app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
 // Google OAuth routes
 app.get('/auth/google',
+  // If already authenticated, do not start a new OAuth flow
+  (req, res, next) => {
+    if (req.isAuthenticated && req.isAuthenticated()) {
+      return res.redirect('/?auth=already');
+    }
+    return next();
+  },
   passport.authenticate('google', { scope: ['profile', 'email'] }));
 
 app.get('/auth/google/callback',
-  passport.authenticate('google', { failureRedirect: '/' }),
+  passport.authenticate('google', { failureRedirect: '/?auth=failure' }),
   (req, res) => {
     // Successful authentication, redirect to main page with success indicator
     res.redirect('/?auth=success');
@@ -102,15 +109,16 @@ app.get('/logout', (req, res, next) => {
   });
 });
 
-// Auth status endpoint
+// Simple endpoint to report current auth status to frontend
 app.get('/auth/status', (req, res) => {
-  const authStatus = req.isAuthenticated && req.isAuthenticated();
-  
-  res.json({
-    authenticated: authStatus,
-    user: req.user || null,
-    sessionId: req.sessionID
-  });
+  const isAuth = !!(req.isAuthenticated && req.isAuthenticated());
+  const user = isAuth && req.user ? {
+    id: req.user.id,
+    email: req.user.email,
+    name: req.user.name,
+    picture: req.user.picture
+  } : null;
+  res.json({ authenticated: isAuth, user });
 });
 
 // Rate limit all requests (basic protection)
