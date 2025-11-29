@@ -16,6 +16,9 @@ const { URL } = require('url');
 
 const app = express();
 
+// ensure secure cookies (sessions) work when behind a proxy/CDN like Cloudflare
+app.set('trust proxy', 1);
+
 // Passport session setup
 passport.serializeUser((user, done) => done(null, user));
 passport.deserializeUser((obj, done) => done(null, obj));
