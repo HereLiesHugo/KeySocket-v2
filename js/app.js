@@ -630,58 +630,39 @@
         } catch (e) { console.error('reRunTurnstile', e); }
     }
 
-    // Show a lightweight banner based on ?auth=success|failure|already
+    // Show a lightweight banner based on ?auth=success|failure|already using static DOM + CSS
     function showAuthBannerFromQuery() {
         try {
             const params = new URLSearchParams(window.location.search || '');
             const status = params.get('auth');
             if (!status) return;
 
+            const banner = document.getElementById('auth-banner');
+            if (!banner) return;
+
             let text = '';
-            let cls = '';
+            let modifierClass = '';
             if (status === 'success') {
                 text = 'Logged in with Google successfully.';
-                cls = 'auth-banner auth-banner--success';
+                modifierClass = 'auth-banner--success';
             } else if (status === 'failure') {
                 text = 'Login with Google failed. Please try again.';
-                cls = 'auth-banner auth-banner--error';
+                modifierClass = 'auth-banner--error';
             } else if (status === 'already') {
                 text = 'You are already logged in.';
-                cls = 'auth-banner auth-banner--info';
+                modifierClass = 'auth-banner--info';
             } else {
                 return;
             }
 
-            const banner = document.createElement('div');
-            banner.className = cls;
             banner.textContent = text;
-            banner.style.position = 'fixed';
-            banner.style.top = '0';
-            banner.style.left = '0';
-            banner.style.right = '0';
-            banner.style.zIndex = '1000';
-            banner.style.padding = '8px 12px';
-            banner.style.textAlign = 'center';
-            banner.style.fontFamily = 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-            banner.style.fontSize = '14px';
-            banner.style.cursor = 'pointer';
-
-            if (status === 'success') {
-                banner.style.background = '#16a34a';
-                banner.style.color = '#ecfdf3';
-            } else if (status === 'failure') {
-                banner.style.background = '#b91c1c';
-                banner.style.color = '#fee2e2';
-            } else {
-                banner.style.background = '#0ea5e9';
-                banner.style.color = '#e0f2fe';
-            }
+            banner.classList.remove('auth-banner--success', 'auth-banner--error', 'auth-banner--info');
+            if (modifierClass) banner.classList.add(modifierClass);
+            banner.hidden = false;
 
             banner.addEventListener('click', () => {
-                try { banner.remove(); } catch (e) { banner.style.display = 'none'; }
-            });
-
-            document.body.appendChild(banner);
+                banner.hidden = true;
+            }, { once: true });
         } catch (e) { /* non-fatal */ }
     }
 

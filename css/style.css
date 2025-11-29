@@ -263,6 +263,35 @@ main {
 }
 
 /* ============================================================================
+   AUTH BANNER
+   ============================================================================ */
+.auth-banner {
+  margin-bottom: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  text-align: center;
+  cursor: pointer;
+  background: var(--glass);
+  color: var(--text-primary);
+}
+
+.auth-banner--success {
+  background: #16a34a;
+  color: #ecfdf3;
+}
+
+.auth-banner--error {
+  background: #b91c1c;
+  color: #fee2e2;
+}
+
+.auth-banner--info {
+  background: #0ea5e9;
+  color: #e0f2fe;
+}
+
+/* ============================================================================
    VIRTUAL KEYBOARD
    ============================================================================ */
 .keyboard-container {
