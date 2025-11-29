@@ -3,7 +3,7 @@ from time import sleep
 
 # --- CONFIGURATION ---
 PORT = 3000  # Change this if your app port changes in .env
-APP_NAME = "keysocket"
+APP_NAME = "keysocket" # Change this to your pm2 app name
 # ---------------------
 
 def log(message):
