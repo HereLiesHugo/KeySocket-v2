@@ -1,295 +1,332 @@
-require('dotenv').config();
-const fs = require('fs');
-const path = require('path');
-const express = require('express');
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
-const morgan = require('morgan');
-const { WebSocketServer } = require('ws');
-const https = require('https');
-const http = require('http');
-const { Client } = require('ssh2');
-const { URL } = require('url');
-const session = require('express-session');
-const passport = require('passport');
-const GoogleStrategy = require('passport-google-oauth20').Strategy;
-
-const app = express();
-
-const HOST = process.env.HOST || '0.0.0.0';
-const PORT = parseInt(process.env.PORT || '3000', 10);
-const USE_TLS = process.env.USE_TLS === 'true';
-const TLS_KEY = process.env.TLS_KEY || '';
-const TLS_CERT = process.env.TLS_CERT || '';
-const TURNSTILE_SECRET = process.env.TURNSTILE_SECRET || '';
-
-// --- Session and Authentication Setup ---
-const sessionParser = session({
-  secret: process.env.SESSION_SECRET || 'a_very_secret_default_key',
-  resave: false,
-  saveUninitialized: false,
-  cookie: { httpOnly: true, secure: USE_TLS, maxAge: 1000 * 60 * 60 * 24 } // 1 day
-});
-app.use(sessionParser);
-app.use(passport.initialize());
-app.use(passport.session());
-
-passport.serializeUser((user, done) => {
-  done(null, {
-      id: user.id,
-      displayName: user.displayName,
-      photo: user.photos?.[0]?.value,
-      email: user.emails?.[0]?.value
-  });
-});
-passport.deserializeUser((obj, done) => {
-  done(null, obj);
-});
-
-if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-  passport.use(new GoogleStrategy({
-      clientID: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: `${process.env.APP_BASE_URL || `http://localhost:${PORT}`}/auth/google/callback`
-    },
-    (accessToken, refreshToken, profile, done) => {
-      return done(null, profile);
-    }
-  ));
-} else {
-  console.warn('Google OAuth credentials not found in .env file. Login will not work.');
-}
-
-// --- Security Middleware ---
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "https://challenges.cloudflare.com", "https://cdn.jsdelivr.net"],
-      frameSrc: ["https://challenges.cloudflare.com", "https://accounts.google.com"],
-      connectSrc: ["'self'", "https://challenges.cloudflare.com", "https://accounts.google.com", "https://www.googleapis.com"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://fonts.googleapis.com", "https://accounts.google.com"],
-      fontSrc: ["'self'", "https://cdn.jsdelivr.net", "https://fonts.gstatic.com"],
-      imgSrc: ["'self'", "data:", "https://*.googleusercontent.com"],
-    }
-  },
-  crossOriginResourcePolicy: false
-}));
-app.use(express.json({ limit: '200kb' }));
-app.use(express.urlencoded({ extended: false }));
-app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
-
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: process.env.NODE_ENV === 'production' ? 100 : 500,
-});
-app.use(limiter);
-
-// --- Static File Serving ---
-const publicDir = path.join(__dirname);
-app.use(express.static(publicDir, { index: false }));
-app.get('/lib/xterm.css', (req, res) => res.sendFile(path.join(__dirname, 'node_modules/@xterm/xterm/css/xterm.css')));
-app.get('/lib/xterm.js', (req, res) => res.sendFile(path.join(__dirname, 'node_modules/@xterm/xterm/lib/xterm.js')));
-app.get('/lib/xterm-addon-fit.js', (req, res) => res.sendFile(path.join(__dirname, 'node_modules/@xterm/addon-fit/lib/addon-fit.js')));
-app.get('/lib/xterm-addon-webgl.js', (req, res) => res.sendFile(path.join(__dirname, 'node_modules/@xterm/addon-webgl/lib/addon-webgl.js')));
-
-const ASSET_VERSION = process.env.ASSET_VERSION || (() => {
-  try { return require(path.join(__dirname, 'package.json')).version || String(Date.now()); } catch (e) { return String(Date.now()); }
-})();
-
-function serveIndex(req, res) {
-  try {
-    const indexPath = path.join(__dirname, 'index.html');
-    let html = fs.readFileSync(indexPath, 'utf8');
-    html = html.replace(/__ASSET_VERSION__/g, ASSET_VERSION);
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    return res.send(html);
-  } catch (e) {
-    return res.status(500).send('Server error');
-  }
-}
-app.get('/', serveIndex);
-
-// --- Authentication Routes ---
-if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-    app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
-    app.get('/auth/google/callback',
-      passport.authenticate('google', { failureRedirect: '/' }),
-      (req, res) => {
-        res.redirect('/');
-      }
-    );
-}
-app.get('/logout', (req, res, next) => {
-    req.logout(function(err) {
-      if (err) { return next(err); }
-      res.redirect('/');
-    });
-});
-
-// --- API Routes ---
-app.get('/api/user', (req, res) => {
-  if (req.isAuthenticated()) {
-    res.json({
-      isAuthenticated: true,
-      user: {
-        displayName: req.user.displayName,
-        photo: req.user.photos && req.user.photos[0].value
-      }
-    });
-  } else {
-    res.json({ isAuthenticated: false });
-  }
-});
-
-// Turnstile verification endpoint
-const turnstileTokens = new Map();
-app.post('/turnstile-verify', (req, res) => {
-    const token = (req.body && req.body.token) || '';
-    if (!token) return res.status(400).json({ ok: false, message: 'missing token' });
-    if (!TURNSTILE_SECRET) {
-        console.error('TURNSTILE_SECRET not configured in environment');
-        return res.status(500).json({ ok: false, message: 'server misconfigured' });
-    }
-
-    const url = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
-    const data = new URLSearchParams();
-    data.append('secret', TURNSTILE_SECRET);
-    data.append('response', token);
-    const remoteIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-    if (remoteIp) data.append('remoteip', remoteIp);
-
-    fetch(url, { method: 'POST', body: data })
-        .then(r => r.json())
-        .then(j => {
-            if (j && j.success) {
-                const oneTimeToken = require('crypto').randomBytes(24).toString('hex');
-                const ttl = (j['error-codes'] && j['error-codes'].includes('timeout-or-duplicate')) ? 5000 : 30000;
-                turnstileTokens.set(oneTimeToken, { verifiedAt: Date.now(), ttl });
-                res.json({ ok: true, token: oneTimeToken, ttl });
-            } else {
-                res.status(401).json({ ok: false, message: 'verify failed', details: j });
-            }
-        })
-        .catch(err => {
-            console.error('turnstile fetch error', err);
-            res.status(500).json({ ok: false, message: 'verify fetch error' });
-        });
-});
-
-// --- Server and WebSocket Setup ---
-let server;
-if (USE_TLS && TLS_KEY && TLS_CERT) {
-  try {
-    const key = fs.readFileSync(TLS_KEY);
-    const cert = fs.readFileSync(TLS_CERT);
-    server = https.createServer({ key, cert }, app);
-  } catch (e) {
-    console.error('TLS cert/key error - falling back to http.', e);
-    server = http.createServer(app);
-  }
-} else {
-  server = http.createServer(app);
-}
-
-const wss = new WebSocketServer({
-  noServer: true
-});
-
-server.on('upgrade', (request, socket, head) => {
-  sessionParser(request, {}, () => {
-    if (!request.session.passport || !request.session.passport.user) {
-      socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
-      socket.destroy();
-      return;
-    }
-    
-    const url = new URL(request.url, `http://${request.headers.host}`);
-    const tsToken = url.searchParams.get('ts');
-    if (!tsToken || !turnstileTokens.has(tsToken)) {
-      socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
-      socket.destroy();
-      return;
-    }
-    turnstileTokens.delete(tsToken);
-
-    wss.handleUpgrade(request, socket, head, (ws) => {
-      wss.emit('connection', ws, request);
-    });
-  });
-});
-
-wss.on('connection', (ws, req) => {
-  const userName = req.session.passport.user.displayName;
-  console.log(`Client connected: ${userName}`);
+(function () {
+  // --- DOM Elements ---
+  const loginView = document.getElementById('login-view');
+  const appView = document.getElementById('app-view');
+  const userInfo = document.getElementById('user-info');
+  const termEl = document.getElementById('terminal');
+  const form = document.getElementById('connect-form');
+  const authSelect = document.getElementById('auth-select');
+  const passwordLabel = document.getElementById('password-label');
+  const keyLabel = document.getElementById('key-label');
+  const keyfileInput = document.getElementById('keyfile');
+  const connectBtn = document.getElementById('connect-btn');
+  const disconnectBtn = document.getElementById('disconnect-btn');
+  const saveBtn = document.getElementById('save-conn');
+  const savedList = document.getElementById('saved-list');
+  const fullscreenBtn = document.getElementById('fullscreen-btn');
+  const terminalArea = document.querySelector('.terminal-area');
   
-  ws.on('error', console.error);
+  // --- App State ---
+  let term;
+  let fit;
+  let socket = null;
+  let privateKeyText = null;
+  let ksTurnstileToken = null;
+  let ksTurnstileVerifiedAt = 0;
+  let ksTurnstileTTL = 0;
+  let ksTurnstileWidgetId = null;
+  let ksTurnstileRendered = false;
 
-  ws.on('message', (msg) => {
+  // --- App Initialization ---
+  document.addEventListener('DOMContentLoaded', checkUserStatus);
+
+  async function checkUserStatus() {
     try {
-      const data = JSON.parse(msg);
-      if (data.type === 'connect') {
-        const { host, port, username, auth, password, privateKey, passphrase } = data;
-        if (!host || !username) {
-            return ws.send(JSON.stringify({ type: 'error', message: 'Missing host or username' }));
+      const response = await fetch('/api/user');
+      if (!response.ok) throw new Error('Failed to fetch user status');
+      const data = await response.json();
+
+      if (data.isAuthenticated) {
+        showAppView(data.user);
+        // Turnstile is implicitly handled before WebSocket connection now
+      } else {
+        showLoginView();
+      }
+    } catch (error) {
+      console.error('Error checking user status:', error);
+      showLoginView();
+    }
+  }
+
+  function showLoginView() {
+    loginView.style.display = 'block';
+    appView.style.display = 'none';
+  }
+
+  function showAppView(user) {
+    loginView.style.display = 'none';
+    appView.style.display = 'grid';
+
+    userInfo.innerHTML = `
+      <img src="${user.photo}" alt="User photo" title="${user.displayName}">
+      <span>${user.displayName}</span>
+      <a href="/logout">Logout</a>
+    `;
+    userInfo.style.display = 'flex';
+
+    initializeApp();
+  }
+
+  function initializeApp() {
+    const Terminal = window.Terminal || null;
+    const FitAddon = (window.FitAddon && (window.FitAddon.FitAddon || window.FitAddon)) || null;
+    const WebglAddon = (window.WebglAddon && (window.WebglAddon.WebglAddon || window.WebglAddon)) || null;
+
+    document.fonts.ready.then(() => {
+      if (Terminal && FitAddon && WebglAddon) {
+        term = new Terminal({
+          rendererType: 'webgl',
+          cursorBlink: true,
+          fontFamily: "'Menlo', 'Monaco', 'Courier New', monospace",
+          fontSize: 14,
+          allowTransparency: false,
+          theme: {
+            background: '#0b1220',
+            foreground: '#cbd5e1'
+          }
+        });
+
+        fit = new (FitAddon.FitAddon || FitAddon)();
+        term.loadAddon(fit);
+        try {
+            term.loadAddon(new (WebglAddon.WebglAddon || WebglAddon)());
+        } catch (e) {
+            console.error("WebGL addon failed to load, falling back to canvas", e);
+        }
+        
+        term.open(termEl);
+        fit.fit();
+        
+        window.KeySocket = { connect, disconnect, terminal: term };
+        
+        initEventListeners();
+        initVirtualKeyboard();
+      } else {
+        fallbackTerminal();
+      }
+    });
+  }
+
+  function initEventListeners() {
+      authSelect.addEventListener('change', setAuthUI);
+      setAuthUI();
+
+      const resizeHandle = document.getElementById('resize-handle');
+      let isResizing = false;
+      let startX, startY, startWidth, startHeight;
+
+      resizeHandle.addEventListener('mousedown', (e) => {
+        isResizing = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        startWidth = terminalArea.offsetWidth;
+        startHeight = terminalArea.offsetHeight;
+        document.addEventListener('mousemove', handleResize);
+        document.addEventListener('mouseup', stopResize);
+      });
+
+      function handleResize(e) {
+        if (!isResizing) return;
+        const newWidth = Math.max(300, startWidth + (e.clientX - startX));
+        const newHeight = Math.max(200, startHeight + (e.clientY - startY));
+        terminalArea.style.width = newWidth + 'px';
+        terminalArea.style.height = newHeight + 'px';
+        if (fit) fit.fit();
+      }
+
+      function stopResize() {
+        isResizing = false;
+        document.removeEventListener('mousemove', handleResize);
+      }
+      
+      fullscreenBtn.addEventListener('click', toggleFullscreen);
+      document.addEventListener('fullscreenchange', () => {
+        if (!document.fullscreenElement) {
+          fullscreenBtn.textContent = '⛶ Fullscreen';
+        }
+      });
+      
+      keyfileInput.addEventListener('change', (e) => {
+        const f = e.target.files[0];
+        if (!f) return;
+        const r = new FileReader();
+        r.onload = () => { privateKeyText = r.result; };
+        r.readAsText(f);
+      });
+      
+      saveBtn.addEventListener('click', saveConnection);
+      loadSaved();
+      savedList.addEventListener('change', () => {
+        const idx = savedList.value;
+        if (idx === '') return;
+        const list = JSON.parse(localStorage.getItem('ks_connections') || '[]');
+        const c = list[parseInt(idx, 10)];
+        if (!c) return;
+        form.host.value = c.host || '';
+        form.port.value = c.port || '22';
+        form.username.value = c.username || '';
+        authSelect.value = c.auth || 'password';
+        setAuthUI();
+      });
+      
+      form.addEventListener('submit', connect);
+      disconnectBtn.addEventListener('click', disconnect);
+      
+      window.addEventListener('resize', () => { if(fit) fit.fit() });
+  }
+
+  function fallbackTerminal() {
+    console.error('xterm.js or one of its addons failed to load');
+    termEl.textContent = '\n[Terminal not available: xterm.js failed to load]\n';
+    // Provide a stub for other functions to not crash
+    window.KeySocket = { connect: ()=>{}, disconnect: ()=>{}, terminal: {} };
+  }
+
+  function setAuthUI() {
+    passwordLabel.style.display = authSelect.value === 'password' ? '' : 'none';
+    keyLabel.style.display = authSelect.value === 'key' ? '' : 'none';
+  }
+
+  function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+      terminalArea.requestFullscreen().catch(err => console.error('Fullscreen request failed:', err));
+      fullscreenBtn.textContent = '⛶ Exit Fullscreen';
+    } else {
+      document.exitFullscreen();
+    }
+  }
+
+  function saveConnection() {
+    const obj = {
+      host: form.host.value,
+      port: form.port.value,
+      username: form.username.value,
+      auth: authSelect.value
+    };
+    const list = JSON.parse(localStorage.getItem('ks_connections') || '[]');
+    list.unshift(obj);
+    localStorage.setItem('ks_connections', JSON.stringify(list.slice(0, 20)));
+    loadSaved();
+  }
+
+  function loadSaved() {
+    const list = JSON.parse(localStorage.getItem('ks_connections') || '[]');
+    savedList.innerHTML = '<option value="">Saved connections</option>' + list.map((c, i) => ` <option value="${i}">${c.username}@${c.host}:${c.port} (${c.auth})</option>`).join('\n');
+  }
+
+  function connect(e) {
+    if (e) e.preventDefault();
+    if (socket) return;
+    
+    // Run turnstile verification right before connecting
+    initTurnstile(() => {
+        term.clear();
+        term.focus();
+
+        const wsUrl = () => {
+            const loc = window.location;
+            const protocol = loc.protocol === 'https:' ? 'wss:' : 'ws:';
+            return `${protocol}//${loc.host}/ssh?ts=${encodeURIComponent(ksTurnstileToken)}`;
         }
 
-        const conn = new Client();
-        conn.on('ready', () => {
-          ws.send(JSON.stringify({ type: 'ready' }));
-          conn.shell((err, stream) => {
-            if (err) {
-              return ws.send(JSON.stringify({ type: 'error', message: 'Shell failed: ' + err.message }));
-            }
-            stream.on('data', (d) => ws.send(d, { binary: true }));
-            stream.on('close', () => {
-              ws.send(JSON.stringify({ type: 'ssh-closed' }));
-              conn.end();
-            });
-            
-            ws.off('message', ws.listeners('message')[0]); // Remove the initial listener
-            ws.on('message', (m) => {
-              try {
-                if (m instanceof ArrayBuffer || Buffer.isBuffer(m)) {
-                  stream.write(m);
-                } else {
-                   const d = JSON.parse(m);
-                   if (d.type === 'resize') {
-                       stream.setWindow(d.rows, d.cols, d.height, d.width);
-                   }
-                }
-              } catch(e) {
-                stream.write(m);
-              }
-            });
-          });
-        });
-        conn.on('error', (err) => {
-          ws.send(JSON.stringify({ type: 'error', message: err.message }));
-        });
-        
-        const connOpts = {
-          host,
-          port: parseInt(port, 10) || 22,
-          username,
-          privateKey,
-          passphrase,
-          readyTimeout: 10000
+        socket = new WebSocket(wsUrl());
+        socket.binaryType = 'arraybuffer';
+
+        socket.onopen = () => {
+          const payload = {
+            type: 'connect',
+            host: form.host.value,
+            port: form.port.value || 22,
+            username: form.username.value,
+            auth: authSelect.value
+          };
+          if (authSelect.value === 'password') payload.password = form.password.value;
+          else payload.privateKey = privateKeyText || null;
+          socket.send(JSON.stringify(payload));
+          connectBtn.disabled = true;
+          disconnectBtn.disabled = false;
         };
-        if (auth === 'password') connOpts.password = password;
         
-        conn.connect(connOpts);
-      }
-    } catch (e) {
-      // Ignore non-JSON messages
+        socket.onmessage = (ev) => {
+          if (typeof ev.data === 'string') {
+            try {
+              const msg = JSON.parse(ev.data);
+              if (msg.type === 'error') term.writeln(`\r\n[ERROR] ${msg.message}`);
+              else if (msg.type === 'ready') term.writeln('\r\n[SSH Ready]');
+              else if (msg.type === 'ssh-closed') term.writeln('\r\n[SSH Closed]');
+            } catch (e) {
+              term.writeln(`\r\n${ev.data}`);
+            }
+          } else {
+            term.write(new Uint8Array(ev.data));
+          }
+        };
+
+        socket.onclose = () => {
+          term.writeln('\r\n[Disconnected]');
+          socket = null;
+          connectBtn.disabled = false;
+          disconnectBtn.disabled = true;
+        };
+        
+        socket.onerror = (err) => {
+          term.writeln('\r\n[Socket error]');
+          console.error('ws error', err);
+        };
+        
+        term.onData((d) => {
+          if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(d);
+          }
+        });
+    });
+  }
+
+  function disconnect() {
+    if (socket) {
+      socket.close();
     }
-  });
+  }
+  
+  function initVirtualKeyboard() {
+      // The full virtual keyboard logic goes here...
+  }
 
-  ws.on('close', () => {
-    console.log(`Client disconnected: ${userName}`);
-  });
-});
+  // --- Turnstile Functions ---
+  function initTurnstile(callback) {
+    if (!TURNSTILE_SECRET) {
+        console.warn("Turnstile secret not set, skipping verification.");
+        if (callback) callback();
+        return;
+    }
+    
+    const widgetEl = document.getElementById('turnstile-widget');
+    const overlay = document.getElementById('turnstile-overlay');
+    overlay.style.display = 'flex';
 
-server.listen(PORT, HOST, () => {
-  console.log(`Server listening on ${USE_TLS ? 'https' : 'http'}://${HOST}:${PORT}`);
-});
+    const onToken = (token) => {
+        ksTurnstileToken = token;
+        overlay.style.display = 'none';
+        if (widgetEl) widgetEl.innerHTML = '';
+        if (callback) callback();
+    };
+    
+    if (window.turnstile) {
+        try {
+            widgetEl.innerHTML = '';
+            window.turnstile.render('#turnstile-widget', {
+                sitekey: '0x4AAAAAACDdgapByiL54XqC', // Replace with your site key
+                callback: onToken,
+            });
+        } catch (e) {
+            console.error('Turnstile render error', e);
+            overlay.style.display = 'none';
+            if (callback) callback();
+        }
+    } else {
+        console.error("Turnstile library not loaded.");
+        overlay.style.display = 'none';
+        if (callback) callback();
+    }
+  }
+})();
