@@ -1,18 +1,64 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="/node_modules/@xterm/xterm/css/xterm.css">
-    <link rel="stylesheet" href="/css/style.css">
-    <script src="/node_modules/@xterm/xterm/lib/xterm.js"></script>
-    <title>Keysocket</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>KeySocket — Web SSH for keysocket.eu</title>
+    <link rel="stylesheet" href="/lib/xterm.css" />
+    <link rel="stylesheet" href="css/style.css?v=__ASSET_VERSION__" />
 </head>
 <body>
-    <div class="terminal-container">
-        <div class="terminal" id="terminal"></div>
+    <div class="app">
+        <header class="topbar">
+            <h1>KeySocket</h1>
+            <div class="domain">keysocket.eu - Note that this is the experimental DEV branch, and there may be unexpected errors or bugs. - <a href="https://github.com/HereLiesHugo/KeySocket-v2/tree/dev">Github</a></div>
+        </header>
+
+        <main>
+            <section class="connect">
+                <form id="connect-form">
+                    <label>Host <input name="host" placeholder="example.com or 192.0.2.1" required></label>
+                    <label>Port <input name="port" type="number" value="22"></label>
+                    <label>Username <input name="username" required></label>
+                    <label>Auth
+                        <select id="auth-select" name="auth">
+                            <option value="password">Password</option>
+                            <option value="key">Private key</option>
+                        </select>
+                    </label>
+                    <label id="password-label">Password <input name="password" type="password"></label>
+                    <label id="key-label" style="display:none">Private key <input id="keyfile" type="file" accept="*/*"></label>
+                    <div class="actions">
+                        <button id="connect-btn" type="submit">Connect</button>
+                        <button id="disconnect-btn" type="button" disabled>Disconnect</button>
+                        <button id="save-conn" type="button">Save</button>
+                        <select id="saved-list"><option value="">Saved connections</option></select>
+                    </div>
+                </form>
+            </section>
+
+            <section class="terminal-area">
+                <div id="terminal" class="terminal"></div>
+            </section>
+        </main>
+
+        <footer class="footer">Secure web SSH gateway — run behind TLS and reverse proxy on <strong>keysocket.eu</strong></footer>
     </div>
 
-    <script src="/js/terminal.js"></script>
+    <!-- Turnstile overlay shown on initial site enter until verified -->
+    <div id="turnstile-overlay" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);z-index:9999;">
+        <div style="background:#fff;padding:24px;border-radius:8px;max-width:420px;width:90%;text-align:center;">
+            <h3>Verify you're human</h3>
+            <p>Please complete the verification to continue using KeySocket.</p>
+            <div id="turnstile-widget"></div>
+        </div>
+    </div>
+
+    <link rel="preload" href="js/app.js" as="script">
+    <script src="/lib/xterm.js"></script>
+    <script src="/lib/xterm-addon-fit.js"></script>
+    <!-- Load Turnstile and call window.ksInitTurnstile when ready -->
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=ksInitTurnstile&render=explicit" async defer></script>
+    <script src="js/app.js?v=__ASSET_VERSION__"></script>
 </body>
 </html>
