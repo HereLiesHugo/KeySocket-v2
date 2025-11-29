@@ -55,10 +55,40 @@
 
       // Expose terminal instance globally after it's initialized
       window.KeySocket = { connect, disconnect, terminal: term };
+
+      // Initialize mobile keys after terminal is ready
+      initMobileKeys();
     } else {
       fallbackTerminal();
     }
   });
+
+  function initMobileKeys() {
+    const mobileKeys = document.querySelector('.mobile-keys');
+    if (!mobileKeys) return;
+
+    // ANSI escape codes for special keys
+    const keyMap = {
+      esc:   '\x1b',    // Escape
+      ctrlc: '\x03',    // Ctrl+C (End of Text)
+      tab:   '\x09',    // Tab
+      left:  '\x1b[D',  // Left Arrow
+      up:    '\x1b[A',  // Up Arrow
+      down:  '\x1b[B',  // Down Arrow
+      right: '\x1b[C'   // Right Arrow
+    };
+
+    mobileKeys.addEventListener('click', (e) => {
+      const target = e.target.closest('.mobile-key');
+      if (!target) return;
+
+      const key = target.dataset.key;
+      if (keyMap[key] && term) {
+        term.paste(keyMap[key]); // Use paste to handle the sequence correctly
+        term.focus(); // Keep terminal focused
+      }
+    });
+  }
 
   function fallbackTerminal() {
       // graceful fallback: create a minimal stub so rest of UI doesn't crash
