@@ -24,6 +24,7 @@
   let fit;
   if (Terminal && typeof Terminal === 'function') {
     term = new Terminal({
+      rendererType: 'dom', // Use DOM renderer for better font spacing
       cursorBlink: true,
       fontFamily: '"Fira Code", monospace',
       fontSize: 12,
