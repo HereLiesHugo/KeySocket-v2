@@ -5,6 +5,9 @@ const express = require('express');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const morgan = require('morgan');
+const session = require('express-session');
+const passport = require('passport');
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const { WebSocketServer } = require('ws');
 const https = require('https');
 const http = require('http');
@@ -12,6 +15,27 @@ const { Client } = require('ssh2');
 const { URL } = require('url');
 
 const app = express();
+
+// Passport session setup
+passport.serializeUser((user, done) => done(null, user));
+passport.deserializeUser((obj, done) => done(null, obj));
+
+// Google OAuth strategy
+passport.use(new GoogleStrategy({
+    clientID: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    callbackURL: process.env.APP_BASE_URL + '/auth/google/callback'
+  },
+  (accessToken, refreshToken, profile, done) => {
+    // Store user profile in session
+    return done(null, {
+      id: profile.id,
+      email: profile.emails[0].value,
+      name: profile.displayName,
+      picture: profile.photos[0].value
+    });
+  }
+));
 
 const HOST = process.env.HOST || '0.0.0.0';
 const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -27,7 +51,7 @@ app.use(helmet({
       // allow Cloudflare Turnstile, jsDelivr CDN, and Google Fonts
       scriptSrc: ["'self'", "https://challenges.cloudflare.com", "https://cdn.jsdelivr.net"],
       frameSrc: ["https://challenges.cloudflare.com"],
-      connectSrc: ["'self'", "https://challenges.cloudflare.com"],
+      connectSrc: ["'self'", "https://challenges.cloudflare.com", "https://accounts.google.com", "https://oauth2.googleapis.com"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://cdn.jsdelivr.net", "https://fonts.gstatic.com"],
       imgSrc: ["'self'", "data:"],
@@ -38,6 +62,25 @@ app.use(helmet({
 app.use(express.json({ limit: '200kb' }));
 app.use(express.urlencoded({ extended: false }));
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+
+// Google OAuth routes
+app.get('/auth/google',
+  passport.authenticate('google', { scope: ['profile', 'email'] }));
+
+app.get('/auth/google/callback',
+  passport.authenticate('google', { failureRedirect: '/' }),
+  (req, res) => {
+    // Successful authentication, redirect to main page
+    res.redirect('/');
+  });
+
+// Logout route
+app.get('/logout', (req, res, next) => {
+  req.logout((err) => {
+    if (err) { return next(err); }
+    res.redirect('/');
+  });
+});
 
 // Rate limit all requests (basic protection)
 const limiter = rateLimit({
@@ -209,20 +252,14 @@ function safeParseJson(message) {
 // Each ws connection may bootstrap an SSH client
 wss.on('connection', (ws, req) => {
   const ip = req.socket.remoteAddress || 'unknown';
-  // require a one-time Turnstile token passed as query param `ts`
-  try {
-    const fullUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
-    const ts = fullUrl.searchParams.get('ts');
-    if (!ts || !consumeVerifiedToken(ts, ip)) {
-      ws.send(JSON.stringify({ type: 'error', message: 'Turnstile verification required' }));
-      ws.close();
-      return;
-    }
-  } catch (e) {
-    ws.send(JSON.stringify({ type: 'error', message: 'Invalid connection parameters' }));
+
+  // Check OAuth authentication (instead of Turnstile)
+  if (!req.session || !req.session.passport || !req.session.passport.user) {
+    ws.send(JSON.stringify({ type: 'error', message: 'Authentication required. Please log in with Google.' }));
     ws.close();
     return;
   }
+
   const concurrent = incrIp(ip);
   if (concurrent > CONCURRENT_PER_IP) {
     ws.send(JSON.stringify({ type: 'error', message: 'Too many concurrent sessions from your IP' }));

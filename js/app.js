@@ -482,7 +482,7 @@
     // Turnstile handling on site enter
     function onTurnstileToken(token) {
         if (!token) return;
-        // send token to server for verification and one-time storage
+        // send token to server for verification and redirect to OAuth
         fetch('/turnstile-verify', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -490,13 +490,14 @@
         }).then(r => r.json()).then(j => {
             console.debug('turnstile verify response', j);
             if (j && j.ok && j.token) {
-                // store the server-issued one-time token (do NOT keep the Cloudflare token)
+                // store the server-issued one-time token temporarily
                 ksTurnstileToken = j.token;
                 ksTurnstileTTL = parseInt(j.ttl || '30000', 10) || 30000;
                 ksTurnstileVerifiedAt = Date.now();
-                const ov = document.getElementById('turnstile-overlay');
-                if (ov) ov.style.display = 'none';
-                try { if (connectBtn) connectBtn.disabled = false; } catch (e) {}
+
+                // Redirect to Google OAuth instead of enabling connect button
+                window.location.href = '/auth/google';
+
                 // clean up widget to avoid duplicate renders later
                 try {
                     const widgetEl = document.getElementById('turnstile-widget');
