@@ -9,6 +9,8 @@ try:
     log('Fetching all updates...')
     # check_call will STOP the script if git fetch fails
     check_call('git fetch --all', shell=True)
+    print('Fetch complete.')
+    sleep(1)
     
     log('Pulling latest changes...')
     check_call('git pull', shell=True)
