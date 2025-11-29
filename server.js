@@ -85,8 +85,8 @@ app.get('/auth/google',
 app.get('/auth/google/callback',
   passport.authenticate('google', { failureRedirect: '/' }),
   (req, res) => {
-    // Successful authentication, redirect to main page
-    res.redirect('/');
+    // Successful authentication, redirect to main page with success indicator
+    res.redirect('/?auth=success');
   });
 
 // Logout route
@@ -94,6 +94,14 @@ app.get('/logout', (req, res, next) => {
   req.logout((err) => {
     if (err) { return next(err); }
     res.redirect('/');
+  });
+});
+
+// Auth status endpoint
+app.get('/auth/status', (req, res) => {
+  res.json({
+    authenticated: req.isAuthenticated && req.isAuthenticated(),
+    user: req.user || null
   });
 });
 
@@ -136,22 +144,12 @@ const ASSET_VERSION = process.env.ASSET_VERSION || (() => {
 
 function serveIndex(req, res) {
   try {
-    // Check if user is already authenticated
-    if (req.isAuthenticated && req.isAuthenticated()) {
-      // User is authenticated, serve the main page directly
-      const indexPath = path.join(__dirname, 'index.html');
-      let html = fs.readFileSync(indexPath, 'utf8');
-      html = html.replace(/__ASSET_VERSION__/g, ASSET_VERSION);
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      return res.send(html);
-    } else {
-      // User not authenticated, serve page that will trigger Turnstile
-      const indexPath = path.join(__dirname, 'index.html');
-      let html = fs.readFileSync(indexPath, 'utf8');
-      html = html.replace(/__ASSET_VERSION__/g, ASSET_VERSION);
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      return res.send(html);
-    }
+    // Always serve the same HTML - let frontend handle authentication logic
+    const indexPath = path.join(__dirname, 'index.html');
+    let html = fs.readFileSync(indexPath, 'utf8');
+    html = html.replace(/__ASSET_VERSION__/g, ASSET_VERSION);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.send(html);
   } catch (e) {
     return res.status(500).send('Server error');
   }
