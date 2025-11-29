@@ -222,6 +222,14 @@ main {
   line-height: 1.2 !important;
 }
 
+/* Ensure terminal visuals follow theme colors */
+.terminal,
+.xterm-viewport,
+.xterm-screen {
+  background-color: var(--panel) !important;
+  color: var(--text-primary) !important;
+}
+
 .resize-handle {
   width: 20px;
   height: 20px;
