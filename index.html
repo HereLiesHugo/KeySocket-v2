@@ -5,14 +5,20 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>KeySocket — Web SSH for keysocket.eu</title>
     <link rel="stylesheet" href="/lib/xterm.css" />
-    <link rel="stylesheet" href="css/style.css?v=__ASSET_VERSION__" />
+    <link rel="stylesheet" href="css/style.css?v=7.1" />
 </head>
 <body>
     <div class="app">
         <header class="topbar">
             <h1>KeySocket</h1>
-            <div class="domain">keysocket.eu - Note that this is the experimental DEV branch, and there may be unexpected errors or bugs. - <a href="https://github.com/HereLiesHugo/KeySocket-v2/tree/dev">Github</a></div>
+            <div class="domain">
+                <a href="https://maturqu.com" target="_blank" rel="noopener noreferrer">Who am I? - maturqu.com</a> | <br>
+                <a href="https://ko-fi.com/maturqu" target="_blank" rel="noopener noreferrer">Support Me on Ko-fi and help me keep this project free</a> | <br>
+                <a href="https://github.com/HereLiesHugo/KeySocket-v2/tree/dev">Github (Dev Branch) - This is the experimental development branch and may contain bugs</a> | <br>
+            </div>
         </header>
+
+        <div id="auth-banner" class="auth-banner" aria-live="polite" aria-atomic="true" hidden></div>
 
         <main>
             <section class="connect">
@@ -68,6 +74,6 @@
     <script src="/lib/xterm-addon-webgl.js"></script>
     <!-- Load Turnstile and call window.ksInitTurnstile when ready -->
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=ksInitTurnstile&render=explicit" async defer></script>
-    <script src="js/app.js?v=__ASSET_VERSION__"></script>
+    <script src="js/app.js?v=7.4"></script>
 </body>
 </html>

@@ -77,6 +77,17 @@ button {
 .domain {
   font-size: 13px;
   color: var(--muted);
+  text-align: right;
+}
+
+.domain a {
+  color: var(--accent);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+.domain a:hover {
+  color: #ffffff;
 }
 
 main {
@@ -263,6 +274,35 @@ main {
 }
 
 /* ============================================================================
+   AUTH BANNER
+   ============================================================================ */
+.auth-banner {
+  margin-bottom: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  text-align: center;
+  cursor: pointer;
+  background: var(--glass);
+  color: var(--text-primary);
+}
+
+.auth-banner--success {
+  background: #16a34a;
+  color: #ecfdf3;
+}
+
+.auth-banner--error {
+  background: #b91c1c;
+  color: #fee2e2;
+}
+
+.auth-banner--info {
+  background: #0ea5e9;
+  color: #e0f2fe;
+}
+
+/* ============================================================================
    VIRTUAL KEYBOARD
    ============================================================================ */
 .keyboard-container {
@@ -306,6 +346,16 @@ main {
   background: var(--accent);
   color: #042024;
   border-color: var(--accent);
+}
+
+/* Style for the language switcher key */
+.keyboard-key[data-code="Lang"] {
+  background-color: #0e7490; /* A distinct but fitting color */
+  border-color: #155e75;
+}
+
+.keyboard-key[data-code="Lang"]:active {
+  background-color: #164e63;
 }
 
 /* ============================================================================
