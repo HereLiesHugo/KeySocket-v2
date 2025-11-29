@@ -546,61 +546,7 @@ main {
 }
 
 @media (max-width: 1279px) {
-  .app {
-    margin: var(--spacing-lg) auto;
-    padding: var(--spacing-md);
-  }
-
-  .topbar {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--spacing-sm);
-  }
-
-  .terminal-area {
-    height: auto;
-    min-height: 360px;
-  }
-
-  #terminal {
-    min-height: 320px;
-  }
-
-  .app-management {
-    margin: 0 var(--spacing-sm);
-    padding: var(--spacing-sm);
-  }
-}
-
-@media (max-width: 600px) {
-  .app {
-    margin: var(--spacing-md) auto;
-    padding: var(--spacing-sm);
-  }
-
-  .topbar h1 {
-    font-size: 16px;
-  }
-
-  .domain {
-    font-size: 12px;
-    text-align: left;
-  }
-
-  .terminal-controls span {
-    display: none;
-  }
-
-  .terminal-controls {
-    justify-content: flex-end;
-  }
-
-  .actions {
-    flex-wrap: wrap;
-  }
-
-  .app-management {
-    max-height: 80vh;
-    overflow: auto;
+  .app-management-grid {
+    grid-template-columns: 1fr;
   }
 }
