@@ -56,38 +56,142 @@
       // Expose terminal instance globally after it's initialized
       window.KeySocket = { connect, disconnect, terminal: term };
 
-      // Initialize mobile keys after terminal is ready
-      initMobileKeys();
+      // Initialize virtual keyboard after terminal is ready
+      initVirtualKeyboard();
     } else {
       fallbackTerminal();
     }
   });
 
-  function initMobileKeys() {
-    const mobileKeys = document.querySelector('.mobile-keys');
-    if (!mobileKeys) return;
+  function initVirtualKeyboard() {
+    const container = document.querySelector('.keyboard-container');
+    if (!container) return;
 
-    // ANSI escape codes for special keys
-    const keyMap = {
-      esc:   '\x1b',    // Escape
-      ctrlc: '\x03',    // Ctrl+C (End of Text)
-      tab:   '\x09',    // Tab
-      left:  '\x1b[D',  // Left Arrow
-      up:    '\x1b[A',  // Up Arrow
-      down:  '\x1b[B',  // Down Arrow
-      right: '\x1b[C'   // Right Arrow
+    // --- Keyboard State ---
+    const state = {
+      shift: false,
+      ctrl: false,
+      layout: 'default' // 'default' or 'symbols'
     };
 
-    mobileKeys.addEventListener('click', (e) => {
-      const target = e.target.closest('.mobile-key');
-      if (!target) return;
+    // --- Key Definitions ---
+    // Each key has a default and a shifted value. `code` is a unique identifier.
+    const keyLayouts = {
+      default: [
+        // Row 1
+        [{ key: '`', shiftKey: '~', code: 'Backquote' }, { key: '1', shiftKey: '!', code: 'Digit1' }, { key: '2', shiftKey: '@', code: 'Digit2' }, { key: '3', shiftKey: '#', code: 'Digit3' }, { key: '4', shiftKey: '$', code: 'Digit4' }, { key: '5', shiftKey: '%', code: 'Digit5' }, { key: '6', shiftKey: '^', code: 'Digit6' }, { key: '7', shiftKey: '&', code: 'Digit7' }, { key: '8', shiftKey: '*', code: 'Digit8' }, { key: '9', shiftKey: '(', code: 'Digit9' }, { key: '0', shiftKey: ')', code: 'Digit0' }, { key: 'backspace', code: 'Backspace', wide: true }],
+        // Row 2
+        [{ key: 'tab', code: 'Tab', wide: true }, { key: 'q', shiftKey: 'Q', code: 'KeyQ' }, { key: 'w', shiftKey: 'W', code: 'KeyW' }, { key: 'e', shiftKey: 'E', code: 'KeyE' }, { key: 'r', shiftKey: 'R', code: 'KeyR' }, { key: 't', shiftKey: 'T', code: 'KeyT' }, { key: 'y', shiftKey: 'Y', code: 'KeyY' }, { key: 'u', shiftKey: 'U', code: 'KeyU' }, { key: 'i', shiftKey: 'I', code: 'KeyI' }, { key: 'o', shiftKey: 'O', code: 'KeyO' }, { key: 'p', shiftKey: 'P', code: 'KeyP' }],
+        // Row 3
+        [{ key: 'esc', code: 'Escape', wide: true }, { key: 'a', shiftKey: 'A', code: 'KeyA' }, { key: 's', shiftKey: 'S', code: 'KeyS' }, { key: 'd', shiftKey: 'D', code: 'KeyD' }, { key: 'f', shiftKey: 'F', code: 'KeyF' }, { key: 'g', shiftKey: 'G', code: 'KeyG' }, { key: 'h', shiftKey: 'H', code: 'KeyH' }, { key: 'j', shiftKey: 'J', code: 'KeyJ' }, { key: 'k', shiftKey: 'K', code: 'KeyK' }, { key: 'l', shiftKey: 'L', code: 'KeyL' }, { key: 'enter', code: 'Enter', wide: true }],
+        // Row 4
+        [{ key: 'shift', code: 'ShiftLeft', wide: true, modifier: true }, { key: 'z', shiftKey: 'Z', code: 'KeyZ' }, { key: 'x', shiftKey: 'X', code: 'KeyX' }, { key: 'c', shiftKey: 'C', code: 'KeyC' }, { key: 'v', shiftKey: 'V', code: 'KeyV' }, { key: 'b', shiftKey: 'B', code: 'KeyB' }, { key: 'n', shiftKey: 'N', code: 'KeyN' }, { key: 'm', shiftKey: 'M', code: 'KeyM' }, { key: ',', shiftKey: '<', code: 'Comma' }, { key: '.', shiftKey: '>', code: 'Period' }, { key: '/', shiftKey: '?', code: 'Slash' }, { key: '↑', code: 'ArrowUp' }],
+        // Row 5
+        [{ key: 'ctrl', code: 'ControlLeft', modifier: true }, { key: 'symbols', code: 'Symbols' }, { key: ' ', code: 'Space', space: true }, { key: '←', code: 'ArrowLeft' }, { key: '↓', code: 'ArrowDown' }, { key: '→', code: 'ArrowRight' }]
+      ],
+      symbols: [
+        // Row 1
+        [{ key: '[', shiftKey: '{', code: 'BracketLeft' }, { key: ']', shiftKey: '}', code: 'BracketRight' }, { key: '(', code: 'Digit9', shift: true }, { key: ')', code: 'Digit0', shift: true }, { key: '<', code: 'Comma', shift: true }, { key: '>', code: 'Period', shift: true }, { key: '=', shiftKey: '+', code: 'Equal' }, { key: '-', shiftKey: '_', code: 'Minus' }],
+        // Row 2
+        [{ key: 'tab', code: 'Tab', wide: true }, { key: '`', shiftKey: '~', code: 'Backquote' }, { key: ';', shiftKey: ':', code: 'Semicolon' }, { key: '\'', shiftKey: '"', code: 'Quote' }, { key: '\\', shiftKey: '|', code: 'Backslash' }],
+        // Row 3 -> Empty on purpose for spacing
+        [],
+        // Row 4
+        [{ key: 'shift', code: 'ShiftLeft', wide: true, modifier: true }],
+        // Row 5
+        [{ key: 'ctrl', code: 'ControlLeft', modifier: true }, { key: 'abc', code: 'Symbols' }, { key: ' ', code: 'Space', space: true }, { key: '←', code: 'ArrowLeft' }, { key: '↓', code: 'ArrowDown' }, { key: '→', code: 'ArrowRight' }]
+      ]
+    };
 
-      const key = target.dataset.key;
-      if (keyMap[key] && term) {
-        term.paste(keyMap[key]); // Use paste to handle the sequence correctly
-        term.focus(); // Keep terminal focused
+    // --- ANSI Escape Code Mapping ---
+    const escapeCodes = {
+      'Enter': '\r', 'Backspace': '\x7f', 'Tab': '\t', 'Escape': '\x1b',
+      'ArrowUp': '\x1b[A', 'ArrowDown': '\x1b[B', 'ArrowRight': '\x1b[C', 'ArrowLeft': '\x1b[D'
+    };
+
+    // --- Event Handler ---
+    container.addEventListener('click', (e) => {
+      const keyEl = e.target.closest('.keyboard-key');
+      if (!keyEl || !term) return;
+
+      const code = keyEl.dataset.code;
+      const char = state.shift ? keyEl.dataset.shiftKey : keyEl.dataset.key;
+
+      // Handle modifier keys
+      if (code === 'ShiftLeft') {
+        state.shift = !state.shift;
+        renderKeyboard();
+        return;
       }
+      if (code === 'ControlLeft') {
+        state.ctrl = !state.ctrl;
+        keyEl.classList.toggle('keyboard-key--active', state.ctrl);
+        return;
+      }
+      if (code === 'Symbols') {
+        state.layout = state.layout === 'default' ? 'symbols' : 'default';
+        renderKeyboard();
+        return;
+      }
+
+      // Handle escape codes for special keys
+      if (escapeCodes[code]) {
+        term.paste(escapeCodes[code]);
+      }
+      // Handle regular characters
+      else if (char) {
+        // Handle Ctrl+<char> combinations
+        if (state.ctrl && char.length === 1) {
+          const charCode = char.toUpperCase().charCodeAt(0);
+          if (charCode >= 65 && charCode <= 90) { // A-Z
+            term.paste(String.fromCharCode(charCode - 64));
+          } else {
+            term.paste(char);
+          }
+        } else {
+          term.paste(char);
+        }
+      }
+
+      // Reset momentary modifiers
+      if (state.shift) {
+        state.shift = false;
+        renderKeyboard();
+      }
+      if (state.ctrl) {
+        state.ctrl = false;
+        document.querySelector('[data-code="ControlLeft"]').classList.remove('keyboard-key--active');
+      }
+
+      term.focus();
     });
+
+    // --- Render Function ---
+    function renderKeyboard() {
+      const layout = keyLayouts[state.layout];
+      container.innerHTML = layout.map(row => `
+        <div class="keyboard-row">
+          ${row.map(key => {
+            const displayChar = state.shift ? (key.shiftKey || key.key.toUpperCase()) : key.key;
+            const keyChar = key.key;
+            const shiftChar = key.shiftKey || key.key.toUpperCase();
+            let className = 'keyboard-key';
+            if (key.wide) className += ' keyboard-key--wider';
+            if (key.space) className += ' keyboard-key--space';
+            if (key.modifier && state[key.key]) className += ' keyboard-key--active';
+            
+            return `<button class="${className}" data-code="${key.code}" data-key="${keyChar}" data-shift-key="${shiftChar}">${displayChar}</button>`;
+          }).join('')}
+        </div>
+      `).join('');
+
+      // Ensure Shift active state is rendered correctly
+      const shiftKey = container.querySelector('[data-code="ShiftLeft"]');
+      if (shiftKey) shiftKey.classList.toggle('keyboard-key--active', state.shift);
+    }
+
+    // --- Initial Render ---
+    renderKeyboard();
   }
 
   function fallbackTerminal() {

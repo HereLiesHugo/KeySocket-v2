@@ -263,33 +263,54 @@ main {
 }
 
 /* ============================================================================
-   MOBILE KEYS
+   VIRTUAL KEYBOARD
    ============================================================================ */
-.mobile-keys {
-  display: none; /* Hidden by default on desktop */
-  grid-column: 1 / -1; /* Span full width in grid */
-  justify-content: center;
-  gap: var(--spacing-sm);
+.keyboard-container {
+  display: none; /* Hidden by default */
+  grid-column: 1 / -1;
   margin-top: var(--spacing-md);
+  padding: var(--spacing-sm);
+  background: var(--panel);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-light);
+  user-select: none;
 }
 
-.mobile-keys button {
-  padding: var(--spacing-md);
+.keyboard-row {
+  display: flex;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-xs);
+}
+
+.keyboard-key {
+  padding: 0;
+  margin: 0;
+  height: 40px;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-light);
-  background: var(--panel);
+  background: var(--glass);
   color: var(--text-primary);
-  cursor: pointer;
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 14px;
-  min-width: 44px;
-  text-align: center;
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
 }
 
-.mobile-keys button:active {
+.keyboard-key:active,
+.keyboard-key--active {
   background: var(--accent);
   color: #042024;
+  border-color: var(--accent);
 }
+
+.keyboard-key--wide { flex: 1.5; }
+.keyboard-key--wider { flex: 2; }
+.keyboard-key--space { flex: 5; }
 
 /* ============================================================================
    RESPONSIVE DESIGN
@@ -298,8 +319,7 @@ main {
   main {
     grid-template-columns: 1fr;
   }
-  .mobile-keys {
-    display: flex; /* Visible on mobile */
-    flex-wrap: wrap;
+  .keyboard-container {
+    display: block; /* Show keyboard on mobile */
   }
 }
