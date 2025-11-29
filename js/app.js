@@ -609,13 +609,20 @@
         Object.keys(css).forEach((k) => {
             root.style.setProperty(k, css[k]);
         });
-        if (term && typeof term.setOption === 'function' && preset.terminal) {
+        if (preset.terminal) {
+            // expose terminal colors as CSS variables for styling container/DOM
             try {
-                term.setOption('theme', {
-                    background: preset.terminal.background,
-                    foreground: preset.terminal.foreground
-                });
+                root.style.setProperty('--terminal-bg', preset.terminal.background);
+                root.style.setProperty('--terminal-fg', preset.terminal.foreground);
             } catch (e) {}
+            if (term && typeof term.setOption === 'function') {
+                try {
+                    term.setOption('theme', {
+                        background: preset.terminal.background,
+                        foreground: preset.terminal.foreground
+                    });
+                } catch (e) {}
+            }
         }
         try {
             localStorage.setItem('ks_theme', currentTheme);
