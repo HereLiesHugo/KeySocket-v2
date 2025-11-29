@@ -24,6 +24,11 @@ main{display:grid;grid-template-columns:340px 1fr;gap:12px;align-items:start}
 .terminal-controls button{padding:6px 12px;border-radius:6px;border:0;background:#0ea5a4;color:#042024;cursor:pointer;font-size:12px}
 .terminal-controls button:hover{background:#0fb8b7}
 .resize-handle{width:20px;height:20px;position:absolute;bottom:0;right:0;cursor:nwse-resize;background:linear-gradient(135deg,transparent 50%,#0ea5a4 50%);border-radius:0 0 8px 0;opacity:0.6;z-index:10}
+.terminal-area:fullscreen{width:100%;height:100%;padding:16px;border-radius:0;margin:0;border:none}
+.terminal-area:-webkit-full-screen{width:100%;height:100%;padding:16px;border-radius:0;margin:0;border:none}
+.terminal-area:-moz-full-screen{width:100%;height:100%;padding:16px;border-radius:0;margin:0;border:none}
+.terminal-area:-ms-fullscreen{width:100%;height:100%;padding:16px;border-radius:0;margin:0;border:none}
+#terminal:fullscreen,#terminal:-webkit-full-screen,#terminal:-moz-full-screen,#terminal:-ms-fullscreen{width:100%;height:100%}
 .footer{margin-top:12px;text-align:center;color:var(--muted);font-size:13px}
 
 /* responsive */
