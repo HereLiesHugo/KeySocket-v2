@@ -18,8 +18,11 @@ main{display:grid;grid-template-columns:340px 1fr;gap:12px}
 .actions{display:flex;gap:8px;margin-top:8px}
 .actions button,.actions select{padding:8px 10px;border-radius:6px;border:0;background:#0ea5a4;color:#042024;cursor:pointer}
 .actions button[disabled]{opacity:.5;cursor:default}
-.terminal-area{background:var(--panel);padding:8px;border-radius:8px;min-height:420px}
-#terminal{height:100%;width:100%;min-height:400px}
+.terminal-area{background:var(--panel);padding:8px;border-radius:8px;min-height:420px;position:relative;resize:both;overflow:hidden;display:flex;flex-direction:column}
+#terminal{height:100%;width:100%;min-height:400px;font-family:'Courier New',Courier,monospace;letter-spacing:0;font-weight:normal}
+.terminal-controls{display:flex;justify-content:flex-end;gap:8px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04)}
+.terminal-controls button{padding:6px 12px;border-radius:6px;border:0;background:#0ea5a4;color:#042024;cursor:pointer;font-size:12px}
+.terminal-controls button:hover{background:#0fb8b7}
 .footer{margin-top:12px;text-align:center;color:var(--muted);font-size:13px}
 
 /* responsive */

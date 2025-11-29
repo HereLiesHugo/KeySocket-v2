@@ -17,6 +17,8 @@
   const disconnectBtn = document.getElementById('disconnect-btn');
   const saveBtn = document.getElementById('save-conn');
   const savedList = document.getElementById('saved-list');
+  const fullscreenBtn = document.getElementById('fullscreen-btn');
+  const terminalArea = document.querySelector('.terminal-area');
 
   let term;
   let fit;
@@ -64,6 +66,23 @@
 
   authSelect.addEventListener('change', setAuthUI);
   setAuthUI();
+
+  // Fullscreen toggle
+  function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+      terminalArea.requestFullscreen().catch(err => console.error('Fullscreen request failed:', err));
+      fullscreenBtn.textContent = '⛶ Exit Fullscreen';
+    } else {
+      document.exitFullscreen();
+      fullscreenBtn.textContent = '⛶ Fullscreen';
+    }
+  }
+  fullscreenBtn.addEventListener('click', toggleFullscreen);
+  document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement) {
+      fullscreenBtn.textContent = '⛶ Fullscreen';
+    }
+  });
 
   window.addEventListener('resize', () => { try { fit.fit(); } catch (e) {} });
 
