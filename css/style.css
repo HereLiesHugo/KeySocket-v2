@@ -308,6 +308,16 @@ main {
   border-color: var(--accent);
 }
 
+/* Style for the language switcher key */
+.keyboard-key[data-code="Lang"] {
+  background-color: #0e7490; /* A distinct but fitting color */
+  border-color: #155e75;
+}
+
+.keyboard-key[data-code="Lang"]:active {
+  background-color: #164e63;
+}
+
 /* ============================================================================
    RESPONSIVE DESIGN
    ============================================================================ */
