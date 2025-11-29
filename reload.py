@@ -1,8 +1,16 @@
 from subprocess import call
 
+call('echo Fetching all updates...', shell=True)
+call('git fetch --all', shell=True)
+call('echo pulling latest changes...', shell=True)
 call('git pull', shell=True)
+call('echo Installing backend dependencies...', shell=True)
 call('npm install', shell=True)
+call('echo Auditing dependencies...', shell=True)
 call('npm audit', shell=True)
+call('echo Fixing dependencies...', shell=True)
 call('npm audit fix', shell=True)
+call('echo Reloading backend (pm2)...', shell=True)
 call('pm2 reload 0', shell=True)
+call('echo Reloading nginx...', shell=True)
 call('sudo systemctl reload nginx', shell=True)
