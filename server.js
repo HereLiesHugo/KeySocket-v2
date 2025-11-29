@@ -62,7 +62,7 @@ app.use(helmet({
 app.use(express.json({ limit: '200kb' }));
 app.use(express.urlencoded({ extended: false }));
 
-// Initialize Passport and session middleware
+// Initialize session middleware first
 app.use(session({
   secret: process.env.SESSION_SECRET,
   resave: false,
@@ -70,9 +70,11 @@ app.use(session({
   cookie: {
     secure: process.env.NODE_ENV === 'production', // HTTPS only in production
     httpOnly: true, // Prevent XSS attacks
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    sameSite: 'lax' // Allow cross-origin requests
   }
 }));
+
 app.use(passport.initialize());
 app.use(passport.session());
 
@@ -99,9 +101,12 @@ app.get('/logout', (req, res, next) => {
 
 // Auth status endpoint
 app.get('/auth/status', (req, res) => {
+  const authStatus = req.isAuthenticated && req.isAuthenticated();
+  
   res.json({
-    authenticated: req.isAuthenticated && req.isAuthenticated(),
-    user: req.user || null
+    authenticated: authStatus,
+    user: req.user || null,
+    sessionId: req.sessionID
   });
 });
 
