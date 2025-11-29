@@ -8,7 +8,6 @@ try:
 
     # 1. GIT OPERATIONS
     log('Fetching/Pulling latest changes...')
-    # git pull includes 'fetch', so we removed the separate fetch step
     check_call('git fetch', shell=True)
     print("Fetched latest changes.")
     check_call('git pull', shell=True)
