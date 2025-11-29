@@ -25,14 +25,10 @@
   if (Terminal && typeof Terminal === 'function') {
     term = new Terminal({
       cursorBlink: true,
-      fontFamily: '"Monaco", "Menlo", "Ubuntu Mono", "Courier New", monospace',
-      fontSize: 13,
-      fontWeight: 400,
-      fontWeightBold: 600,
-      lineHeight: 1.3,
-      letterSpacing: 0,
+      fontFamily: '"Fira Code", monospace',
+      fontSize: 12,
+      lineHeight: 1.2,
       allowTransparency: false,
-      disableStdin: false,
       theme: {
         background: '#0b1220',
         foreground: '#cbd5e1'
