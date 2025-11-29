@@ -32,9 +32,16 @@ try:
     check_call('sudo systemctl reload nginx', shell=True)
     sleep(1)
 
+    log('Waiting for services to stabilize...')
+    sleep(3)
+
+    log('Verifying nginx configuration...')
+    check_call('sudo nginx -t', shell=True)
+    sleep(1)
+
     log('Verifying backend is running...')
     check_call('curl -I http://localhost:3000', shell=True)
-    sleep(1)
+    sleep(2)
 
     log('Checking nginx status...')
     # Added --no-pager so the script doesn't freeze
