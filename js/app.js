@@ -18,6 +18,7 @@
     const savedList = document.getElementById('saved-list');
     const fullscreenBtn = document.getElementById('fullscreen-btn');
     const terminalArea = document.querySelector('.terminal-area');
+    const appManagementOverlay = document.getElementById('app-management-overlay');
     const appManagement = document.getElementById('app-management');
     const appManagementToggle = document.getElementById('app-management-toggle');
     const appManagementClose = document.getElementById('app-management-close');
@@ -421,14 +422,26 @@
     if (saveBtn) saveBtn.addEventListener('click', saveConnection);
 
     function initAppManagement() {
-        if (appManagementToggle && appManagement) {
+        if (appManagementToggle && appManagementOverlay) {
             appManagementToggle.addEventListener('click', () => {
-                appManagement.hidden = false;
+                appManagementOverlay.hidden = false;
             });
         }
-        if (appManagementClose && appManagement) {
+        if (appManagementClose && appManagementOverlay) {
             appManagementClose.addEventListener('click', () => {
-                appManagement.hidden = true;
+                appManagementOverlay.hidden = true;
+            });
+        }
+        if (appManagementOverlay) {
+            appManagementOverlay.addEventListener('click', (e) => {
+                if (e.target === appManagementOverlay) {
+                    appManagementOverlay.hidden = true;
+                }
+            });
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && !appManagementOverlay.hidden) {
+                    appManagementOverlay.hidden = true;
+                }
             });
         }
         if (appManagementConnectionsList) {
@@ -452,7 +465,7 @@
                     form.username.value = conn.username || '';
                     if (authSelect) authSelect.value = conn.auth || 'password';
                     setAuthUI();
-                    appManagement.hidden = true;
+                    if (appManagementOverlay) appManagementOverlay.hidden = true;
                     try {
                         form.scrollIntoView({ behavior: 'smooth', block: 'start' });
                     } catch (e2) {}
@@ -529,6 +542,54 @@
             terminal: {
                 background: '#272822',
                 foreground: '#f5f5f4'
+            }
+        },
+        dracula: {
+            css: {
+                '--bg': '#282a36',
+                '--panel': '#20222d',
+                '--muted': '#9ea2b8',
+                '--accent': '#bd93f9',
+                '--glass': 'rgba(40, 42, 54, 0.9)',
+                '--border-subtle': 'rgba(189, 147, 249, 0.25)',
+                '--border-light': 'rgba(189, 147, 249, 0.45)',
+                '--text-primary': '#f8f8f2'
+            },
+            terminal: {
+                background: '#282a36',
+                foreground: '#f8f8f2'
+            }
+        },
+        'solarized-dark': {
+            css: {
+                '--bg': '#002b36',
+                '--panel': '#073642',
+                '--muted': '#93a1a1',
+                '--accent': '#b58900',
+                '--glass': 'rgba(7, 54, 66, 0.95)',
+                '--border-subtle': 'rgba(147, 161, 161, 0.35)',
+                '--border-light': 'rgba(181, 137, 0, 0.6)',
+                '--text-primary': '#eee8d5'
+            },
+            terminal: {
+                background: '#002b36',
+                foreground: '#eee8d5'
+            }
+        },
+        'solarized-light': {
+            css: {
+                '--bg': '#fdf6e3',
+                '--panel': '#fffef7',
+                '--muted': '#657b83',
+                '--accent': '#268bd2',
+                '--glass': 'rgba(233, 225, 201, 0.9)',
+                '--border-subtle': 'rgba(101, 123, 131, 0.35)',
+                '--border-light': 'rgba(38, 139, 210, 0.6)',
+                '--text-primary': '#073642'
+            },
+            terminal: {
+                background: '#fdf6e3',
+                foreground: '#073642'
             }
         }
     };
