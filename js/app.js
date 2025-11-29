@@ -67,6 +67,41 @@
   authSelect.addEventListener('change', setAuthUI);
   setAuthUI();
 
+  // Resize handle for terminal-area
+  const resizeHandle = document.getElementById('resize-handle');
+  let isResizing = false;
+  let startX, startY, startWidth, startHeight;
+
+  resizeHandle.addEventListener('mousedown', (e) => {
+    isResizing = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    startWidth = terminalArea.offsetWidth;
+    startHeight = terminalArea.offsetHeight;
+    document.addEventListener('mousemove', handleResize);
+    document.addEventListener('mouseup', stopResize);
+  });
+
+  function handleResize(e) {
+    if (!isResizing) return;
+    const deltaX = e.clientX - startX;
+    const deltaY = e.clientY - startY;
+    const newWidth = Math.max(300, startWidth + deltaX);
+    const newHeight = Math.max(200, startHeight + deltaY);
+    terminalArea.style.width = newWidth + 'px';
+    terminalArea.style.height = newHeight + 'px';
+    // Trigger terminal resize
+    if (fit && typeof fit.fit === 'function') {
+      try { fit.fit(); } catch (e) {}
+    }
+  }
+
+  function stopResize() {
+    isResizing = false;
+    document.removeEventListener('mousemove', handleResize);
+    document.removeEventListener('mouseup', stopResize);
+  }
+
   // Fullscreen toggle
   function toggleFullscreen() {
     if (!document.fullscreenElement) {
