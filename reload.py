@@ -1,62 +1,62 @@
 from subprocess import call, check_call, CalledProcessError
 from time import sleep
 
-# Helper function to print bold text (optional, makes logs easier to read)
 def log(message):
     print(f"\n--- {message} ---")
 
 try:
-    log('Fetching all updates...')
-    # check_call will STOP the script if git fetch fails
-    check_call('git fetch --all', shell=True)
-    print('Fetch complete.')
-    sleep(1)
-    
+    # 1. GIT OPERATIONS
     log('Pulling latest changes...')
+    # git pull includes 'fetch', so we removed the separate fetch step
     check_call('git pull', shell=True)
     sleep(1)
 
+    # 2. DEPENDENCIES
     log('Installing backend dependencies...')
     check_call('npm install', shell=True)
     sleep(1)
 
     log('Auditing dependencies...')
-    # We use 'call' here because npm audit returns an error code if vulnerabilities are found.
-    # We don't want to stop the deployment just because of a warning, so we don't use check_call.
+    # We use 'call' so warnings don't stop the deployment
     call('npm audit', shell=True)
     
+    # 3. BACKEND RELOAD
     log('Reloading backend through pm2...')
-    # Using your updated specific app name
     check_call('pm2 reload keysocket --update-env', shell=True)
+    
+    log('Waiting for backend to stabilize (3s)...')
+    sleep(3) # Give PM2 a moment to actually boot the process
+
+    # 4. HEALTH CHECK (Crucial Step)
+    log('Verifying backend is running...')
+    # Added '-f': Fails silently (returns error code) on HTTP errors (404/500).
+    # Added '--retry': Tries 3 times in case the app is slow to start.
+    check_call('curl -f -I --retry 3 --retry-delay 1 http://localhost:3000', shell=True)
+    sleep(1)
+
+    # 5. NGINX RELOAD (Safe Mode)
+    log('Verifying nginx configuration...')
+    # We check config BEFORE reloading. If this fails, we don't reload.
+    check_call('sudo nginx -t', shell=True)
     sleep(1)
 
     log('Reloading nginx...')
     check_call('sudo systemctl reload nginx', shell=True)
     sleep(1)
 
-    log('Waiting for services to stabilize...')
-    sleep(3)
-
-    log('Verifying nginx configuration...')
-    check_call('sudo nginx -t', shell=True)
-    sleep(1)
-
-    log('Verifying backend is running...')
-    check_call('curl -I http://localhost:3000', shell=True)
-    sleep(2)
-
+    # 6. STATUS REPORTS
     log('Checking nginx status...')
-    # Added --no-pager so the script doesn't freeze
     call('sudo systemctl status nginx --no-pager', shell=True)
     sleep(1)
 
     log('Checking pm2 status...')
     call('pm2 status keysocket', shell=True)
-    sleep(1)
 
     log('Update and reload complete!')
 
 except CalledProcessError:
     print("\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
     print("ERROR: One of the commands failed. Deployment stopped.")
+    print("Check the logs above to see which step failed.")
     print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+    
