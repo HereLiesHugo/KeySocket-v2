@@ -210,6 +210,26 @@ main {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Override xterm.js default font settings for consistent character spacing */
+.xterm {
+  font-family: var(--font-mono) !important;
+  font-size: 14px !important;
+  line-height: 1.4 !important;
+  letter-spacing: 0 !important;
+  text-rendering: geometricPrecision !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+}
+
+.xterm-screen {
+  font-family: var(--font-mono) !important;
+}
+
+.xterm-row {
+  font-family: var(--font-mono) !important;
+  font-size: 14px !important;
+}
+
 .resize-handle {
   width: 20px;
   height: 20px;

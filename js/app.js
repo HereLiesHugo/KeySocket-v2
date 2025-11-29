@@ -23,7 +23,18 @@
   let term;
   let fit;
   if (Terminal && typeof Terminal === 'function') {
-    term = new Terminal({ cursorBlink: true });
+    term = new Terminal({
+      cursorBlink: true,
+      fontFamily: '"Courier New", Courier, monospace',
+      fontSize: 14,
+      lineHeight: 1.4,
+      letterSpacing: 0,
+      allowTransparency: false,
+      theme: {
+        background: '#0b1220',
+        foreground: '#cbd5e1'
+      }
+    });
     if (FitAddon && (typeof FitAddon === 'function' || typeof FitAddon === 'object')) {
       try { fit = new (FitAddon.FitAddon || FitAddon)(); } catch (e) { fit = new FitAddon(); }
       try { term.loadAddon(fit); } catch (e) { /* ignore addon load errors */ }
