@@ -61,6 +61,21 @@ app.use(helmet({
 }));
 app.use(express.json({ limit: '200kb' }));
 app.use(express.urlencoded({ extended: false }));
+
+// Initialize Passport and session middleware
+app.use(session({
+  secret: process.env.SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production', // HTTPS only in production
+    httpOnly: true, // Prevent XSS attacks
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+}));
+app.use(passport.initialize());
+app.use(passport.session());
+
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
 // Google OAuth routes
