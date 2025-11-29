@@ -479,6 +479,28 @@
     if (form) form.addEventListener('submit', connect);
     if (disconnectBtn) disconnectBtn.addEventListener('click', disconnect);
 
+    // Check authentication status on page load
+    function checkAuthStatus() {
+        fetch('/auth/status', {
+            method: 'GET',
+            credentials: 'same-origin'
+        }).then(r => r.json()).then(data => {
+            if (data.authenticated) {
+                // User is already authenticated, hide Turnstile overlay and enable connect
+                const ov = document.getElementById('turnstile-overlay');
+                if (ov) ov.style.display = 'none';
+                if (connectBtn) connectBtn.disabled = false;
+                console.log('User authenticated, skipping Turnstile');
+            } else {
+                // User not authenticated, show Turnstile
+                initTurnstile();
+            }
+        }).catch(err => {
+            console.log('Auth check failed, showing Turnstile', err);
+            initTurnstile();
+        });
+    }
+
     // Turnstile handling on site enter
     function onTurnstileToken(token) {
         if (!token) return;
