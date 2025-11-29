@@ -75,7 +75,6 @@
     };
 
     // --- Key Definitions ---
-    // Each key has a default and a shifted value. `code` is a unique identifier.
     const keyLayouts = {
       default: [
         // Row 1
@@ -108,6 +107,11 @@
       'Enter': '\r', 'Backspace': '\x7f', 'Tab': '\t', 'Escape': '\x1b',
       'ArrowUp': '\x1b[A', 'ArrowDown': '\x1b[B', 'ArrowRight': '\x1b[C', 'ArrowLeft': '\x1b[D'
     };
+    
+    function sendToSocket(data) {
+      if (!socket || socket.readyState !== WebSocket.OPEN) return;
+      socket.send(new TextEncoder().encode(data));
+    }
 
     // --- Event Handler ---
     container.addEventListener('click', (e) => {
@@ -136,7 +140,7 @@
 
       // Handle escape codes for special keys
       if (escapeCodes[code]) {
-        term.paste(escapeCodes[code]);
+        sendToSocket(escapeCodes[code]);
       }
       // Handle regular characters
       else if (char) {
@@ -144,12 +148,12 @@
         if (state.ctrl && char.length === 1) {
           const charCode = char.toUpperCase().charCodeAt(0);
           if (charCode >= 65 && charCode <= 90) { // A-Z
-            term.paste(String.fromCharCode(charCode - 64));
+            sendToSocket(String.fromCharCode(charCode - 64));
           } else {
-            term.paste(char);
+            sendToSocket(char);
           }
         } else {
-          term.paste(char);
+          sendToSocket(char);
         }
       }
 
