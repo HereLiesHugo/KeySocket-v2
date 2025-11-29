@@ -24,12 +24,12 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      // allow Cloudflare Turnstile and jsDelivr CDN for xterm
+      // allow Cloudflare Turnstile, jsDelivr CDN, and Google Fonts
       scriptSrc: ["'self'", "https://challenges.cloudflare.com", "https://cdn.jsdelivr.net"],
       frameSrc: ["https://challenges.cloudflare.com"],
       connectSrc: ["'self'", "https://challenges.cloudflare.com"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
-      fontSrc: ["'self'", "https://cdn.jsdelivr.net"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://cdn.jsdelivr.net", "https://fonts.gstatic.com"],
       imgSrc: ["'self'", "data:"],
     }
   },
