@@ -546,6 +546,10 @@ main {
 }
 
 @media (max-width: 1279px) {
+  .keyboard-container {
+    display: block; /* Hide keyboard when app management is open on mobile */
+  }
+
   .app-management-grid {
     grid-template-columns: 1fr;
   }
