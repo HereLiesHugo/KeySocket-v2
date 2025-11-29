@@ -35,7 +35,6 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 passport.serializeUser((user, done) => {
-  // Store a minimal user object in the session
   done(null, {
       id: user.id,
       displayName: user.displayName,
@@ -44,7 +43,6 @@ passport.serializeUser((user, done) => {
   });
 });
 passport.deserializeUser((obj, done) => {
-  // The object from the session is returned as is
   done(null, obj);
 });
 
@@ -55,7 +53,6 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
       callbackURL: `${process.env.APP_BASE_URL || `http://localhost:${PORT}`}/auth/google/callback`
     },
     (accessToken, refreshToken, profile, done) => {
-      // In a real app, you would find or create a user in your database here.
       return done(null, profile);
     }
   ));
@@ -73,7 +70,7 @@ app.use(helmet({
       connectSrc: ["'self'", "https://challenges.cloudflare.com", "https://accounts.google.com", "https://www.googleapis.com"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://fonts.googleapis.com", "https://accounts.google.com"],
       fontSrc: ["'self'", "https://cdn.jsdelivr.net", "https://fonts.gstatic.com"],
-      imgSrc: ["'self'", "data:", "https://*.googleusercontent.com"], // Allow user profile images from Google from Google
+      imgSrc: ["'self'", "data:", "https://*.googleusercontent.com"],
     }
   },
   crossOriginResourcePolicy: false
@@ -84,7 +81,7 @@ app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: process.env.NODE_ENV === 'production' ? 100 : 500, // Stricter in prod
+  max: process.env.NODE_ENV === 'production' ? 100 : 500,
 });
 app.use(limiter);
 
@@ -119,7 +116,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     app.get('/auth/google/callback',
       passport.authenticate('google', { failureRedirect: '/' }),
       (req, res) => {
-        res.redirect('/'); // Successful auth, redirect home.
+        res.redirect('/');
       }
     );
 }
@@ -145,6 +142,41 @@ app.get('/api/user', (req, res) => {
   }
 });
 
+// Turnstile verification endpoint
+const turnstileTokens = new Map();
+app.post('/turnstile-verify', (req, res) => {
+    const token = (req.body && req.body.token) || '';
+    if (!token) return res.status(400).json({ ok: false, message: 'missing token' });
+    if (!TURNSTILE_SECRET) {
+        console.error('TURNSTILE_SECRET not configured in environment');
+        return res.status(500).json({ ok: false, message: 'server misconfigured' });
+    }
+
+    const url = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
+    const data = new URLSearchParams();
+    data.append('secret', TURNSTILE_SECRET);
+    data.append('response', token);
+    const remoteIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    if (remoteIp) data.append('remoteip', remoteIp);
+
+    fetch(url, { method: 'POST', body: data })
+        .then(r => r.json())
+        .then(j => {
+            if (j && j.success) {
+                const oneTimeToken = require('crypto').randomBytes(24).toString('hex');
+                const ttl = (j['error-codes'] && j['error-codes'].includes('timeout-or-duplicate')) ? 5000 : 30000;
+                turnstileTokens.set(oneTimeToken, { verifiedAt: Date.now(), ttl });
+                res.json({ ok: true, token: oneTimeToken, ttl });
+            } else {
+                res.status(401).json({ ok: false, message: 'verify failed', details: j });
+            }
+        })
+        .catch(err => {
+            console.error('turnstile fetch error', err);
+            res.status(500).json({ ok: false, message: 'verify fetch error' });
+        });
+});
+
 // --- Server and WebSocket Setup ---
 let server;
 if (USE_TLS && TLS_KEY && TLS_CERT) {
@@ -161,18 +193,25 @@ if (USE_TLS && TLS_KEY && TLS_CERT) {
 }
 
 const wss = new WebSocketServer({
-  noServer: true // We manually handle the upgrade to integrate session parsing
+  noServer: true
 });
 
 server.on('upgrade', (request, socket, head) => {
-  // Use session parser to find the user session for the upgrade request
   sessionParser(request, {}, () => {
     if (!request.session.passport || !request.session.passport.user) {
-      console.log(`[Security] WebSocket upgrade rejected for unauthenticated user.`);
       socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
       socket.destroy();
       return;
     }
+    
+    const url = new URL(request.url, `http://${request.headers.host}`);
+    const tsToken = url.searchParams.get('ts');
+    if (!tsToken || !turnstileTokens.has(tsToken)) {
+      socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+      socket.destroy();
+      return;
+    }
+    turnstileTokens.delete(tsToken);
 
     wss.handleUpgrade(request, socket, head, (ws) => {
       wss.emit('connection', ws, request);
@@ -184,12 +223,72 @@ wss.on('connection', (ws, req) => {
   const userName = req.session.passport.user.displayName;
   console.log(`Client connected: ${userName}`);
   
-  // ... (Your existing WebSocket 'message' and 'close' logic goes here)
-  // Make sure to adapt it to be inside this 'connection' event handler
-
   ws.on('error', console.error);
-});
 
+  ws.on('message', (msg) => {
+    try {
+      const data = JSON.parse(msg);
+      if (data.type === 'connect') {
+        const { host, port, username, auth, password, privateKey, passphrase } = data;
+        if (!host || !username) {
+            return ws.send(JSON.stringify({ type: 'error', message: 'Missing host or username' }));
+        }
+
+        const conn = new Client();
+        conn.on('ready', () => {
+          ws.send(JSON.stringify({ type: 'ready' }));
+          conn.shell((err, stream) => {
+            if (err) {
+              return ws.send(JSON.stringify({ type: 'error', message: 'Shell failed: ' + err.message }));
+            }
+            stream.on('data', (d) => ws.send(d, { binary: true }));
+            stream.on('close', () => {
+              ws.send(JSON.stringify({ type: 'ssh-closed' }));
+              conn.end();
+            });
+            
+            ws.off('message', ws.listeners('message')[0]); // Remove the initial listener
+            ws.on('message', (m) => {
+              try {
+                if (m instanceof ArrayBuffer || Buffer.isBuffer(m)) {
+                  stream.write(m);
+                } else {
+                   const d = JSON.parse(m);
+                   if (d.type === 'resize') {
+                       stream.setWindow(d.rows, d.cols, d.height, d.width);
+                   }
+                }
+              } catch(e) {
+                stream.write(m);
+              }
+            });
+          });
+        });
+        conn.on('error', (err) => {
+          ws.send(JSON.stringify({ type: 'error', message: err.message }));
+        });
+        
+        const connOpts = {
+          host,
+          port: parseInt(port, 10) || 22,
+          username,
+          privateKey,
+          passphrase,
+          readyTimeout: 10000
+        };
+        if (auth === 'password') connOpts.password = password;
+        
+        conn.connect(connOpts);
+      }
+    } catch (e) {
+      // Ignore non-JSON messages
+    }
+  });
+
+  ws.on('close', () => {
+    console.log(`Client disconnected: ${userName}`);
+  });
+});
 
 server.listen(PORT, HOST, () => {
   console.log(`Server listening on ${USE_TLS ? 'https' : 'http'}://${HOST}:${PORT}`);
