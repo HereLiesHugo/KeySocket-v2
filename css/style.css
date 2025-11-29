@@ -308,10 +308,6 @@ main {
   border-color: var(--accent);
 }
 
-.keyboard-key--wide { flex: 1.5; }
-.keyboard-key--wider { flex: 2; }
-.keyboard-key--space { flex: 5; }
-
 /* ============================================================================
    RESPONSIVE DESIGN
    ============================================================================ */
