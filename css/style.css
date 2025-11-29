@@ -77,6 +77,17 @@ button {
 .domain {
   font-size: 13px;
   color: var(--muted);
+  text-align: right;
+}
+
+.domain a {
+  color: var(--accent);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+.domain a:hover {
+  color: #ffffff;
 }
 
 main {
