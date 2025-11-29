@@ -1,46 +1,104 @@
-# KeySocket — Web SSH gateway (xterm.js)
+# KeySocket: A Secure Web SSH Gateway
 
-I really just think there aren't enough good, free, web-based ssh clients out there, so thats why this project exists.
+## Website:
+### https://keysocket.eu
 
-This repository contains a minimal production-ready web SSH gateway using xterm.js for the browser and `ssh2` + `ws` on the server. It is prepared for deployment at the domain `keysocket.eu`.
+I thought there weren't enough free web ssh clients.
+So here, a free web ssh client with modern styling.
 
-https://keysocket.eu/
+Here's the boring version:
 
-Important: forwarding private keys or passwords through the gateway has security implications. Prefer running this service behind a secure reverse proxy (Nginx) with TLS, and read the deployment notes below.
+KeySocket is a self-hosted, web-based SSH client designed for secure and convenient access to remote terminals from any modern browser. It provides a clean, responsive interface powered by xterm.js and a robust Node.js backend.
 
-Quick start (development)
+The primary goal of this project is to offer a secure alternative to traditional desktop SSH clients, with a focus on usability for both desktop and mobile devices.
 
-1. Copy `.env.example` to `.env` and edit if needed.
-2. Install dependencies and run:
+## Core Features
 
-```bash
-npm install
-npm run dev
-```
+- **Web-Based Terminal:** A full-featured terminal emulator in the browser, powered by xterm.js with WebGL rendering for high performance.
+- **Secure Authentication:** All sessions are protected by mandatory Google OAuth 2.0, ensuring that only authenticated users can access the gateway.
+- **Flexible SSH Authentication:** Supports both password and private key-based authentication for connecting to remote hosts.
+- **Client-Side Key Handling:** Private keys are handled exclusively in the browser's memory and are never stored on the server, providing a clear security boundary.
+- **Mobile-First Design:** Includes a responsive on-screen keyboard with QWERTY, AZERTY, and symbol layouts, making it fully usable on tablets and phones.
+- **Customizable Terminal:** The terminal window is fully resizable and includes a fullscreen mode for an immersive experience.
+- **Connection Management:** Users can save frequently used connection details (host, port, user) to their browser's local storage for quick access.
+- **Built-in Security:** The application is hardened with rate-limiting, a strict Content Security Policy (CSP), and secure WebSocket session handling.
 
-Open `http://localhost:3000/`.
+## Security Model
 
-Production deploy notes (keysocket.eu)
+Security is a primary consideration in KeySocket's design.
 
-- Recommended: run behind an Nginx reverse proxy that terminates TLS for `keysocket.eu` and proxies `/ssh` WebSocket connections to the internal port (3000). This keeps Node behind a hardened proxy and allows easy LetsEncrypt automation.
-- Alternatively set `USE_TLS=true` and configure `TLS_KEY` and `TLS_CERT` to point to your certificate and key (e.g. from certbot). Running Node directly with TLS is supported but less flexible.
+- **User Authentication:** Access to the gateway is restricted to users who have authenticated via Google OAuth. Anonymous connection attempts are not possible.
+- **WebSocket Security:** WebSocket connections are tightly integrated with the Express.js session middleware. Only authenticated users with a valid session can establish a WebSocket connection.
+- **Rate Limiting:** The server implements strict rate-limiting on all HTTP requests to prevent brute-force attacks and other abuse.
+- **Client-Side Private Keys:** To prevent the server from becoming a high-value target for key theft, private keys are never sent to or stored on the server. They are loaded into the browser's memory for the duration of the connection attempt only. Users are strongly encouraged to use passphrase-encrypted keys as a best practice.
 
-Security & hardening
+## Getting Started
 
-- Use `ALLOWED_HOSTS` in `.env` to restrict which destination hosts users may connect to.
-- Keep the server behind a firewall and use strong rate limits.
-- Consider additional authentication (login to the web UI) before allowing arbitrary SSH connections.
+### Prerequisites
 
-Features implemented
+- Node.js (v16 or newer recommended)
+- A Google account for creating OAuth 2.0 credentials
 
-- xterm.js based terminal in the browser
-- WebSocket `/ssh` bridge to the SSH server using `ssh2`
-- Password or private-key auth (client may upload a key which is forwarded to the server)
-- Saved connections in `localStorage`
-- Basic production hardening: `helmet`, `express-rate-limit`, logging, optional TLS
+### Installation and Setup
 
-Limitations & next steps
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/HereLiesHugo/KeySocket-v2.git
+    cd KeySocket-v2
+    ```
 
-- No user authentication for the web UI — add OAuth / session login for multi-user deployments.
-- Sending private keys through the network is risky — implement client-side encryption or server-side key storage if required.
-- Add auditing/logging of sessions if you need compliance.
+2.  **Install dependencies:**
+    ```bash
+    npm install
+    ```
+
+3.  **Create Google OAuth Credentials:**
+    - Go to the [Google Cloud Platform Console](https://console.cloud.google.com/).
+    - Create a new project.
+    - Navigate to "APIs & Services" > "Credentials".
+    - Click "Create Credentials" > "OAuth client ID".
+    - Select "Web application" as the application type.
+    - Under "Authorized redirect URIs", add your application's callback URL. For local development, this is `http://localhost:3000/auth/google/callback`.
+    - Copy the generated "Client ID" and "Client Secret".
+
+4.  **Configure Environment Variables:**
+    - Copy the `.env.example` file to a new file named `.env`:
+      ```bash
+      cp .env.example .env
+      ```
+    - Open the `.env` file and fill in the required values:
+      ```
+      # Google OAuth Credentials
+      GOOGLE_CLIENT_ID="YOUR_CLIENT_ID_HERE"
+      GOOGLE_CLIENT_SECRET="YOUR_CLIENT_SECRET_HERE"
+
+      # Session Security
+      SESSION_SECRET="a_long_random_string_for_securing_sessions"
+
+      # Application URL (important for OAuth redirects)
+      APP_BASE_URL="http://localhost:3000"
+      ```
+
+### Running the Application
+
+-   **For development:**
+    ```bash
+    npm run dev
+    ```
+    The application will be available at `http://localhost:3000`.
+
+-   **For production:**
+    It is highly recommended to run the application behind a reverse proxy like Nginx that can handle TLS termination and provide an additional layer of security.
+    ```bash
+    npm start
+    ```
+
+## Contributions
+
+This is a community-driven project. Contributions, bug reports, and feature requests are welcome. Please feel free to open an issue or submit a pull request on the [GitHub repository](https://github.com/HereLiesHugo/KeySocket-v2).
+
+## Support
+
+If you find this project useful, please consider supporting its development:
+- **Website:** [maturqu.com](https://maturqu.com)
+- **Ko-fi:** [Support on Ko-fi](https://ko-fi.com/maturqu)
