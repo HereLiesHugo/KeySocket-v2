@@ -1,7 +1,6 @@
 /* Frontend: xterm.js + WebSocket bridge
  * - Saves connections to localStorage
- * - Supports password or private key (key uploaded and sent to backend)
- * NOTE: Sending private keys through the network has security implications.
+ * - Supports password or private key (key uploaded and sent to backend) (but not saved)
  */
 (function () {
     const Terminal = window.Terminal || null;
