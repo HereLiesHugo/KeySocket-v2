@@ -524,11 +524,16 @@ main {
   width: 100%;
   padding: var(--spacing-sm);
   margin-top: var(--spacing-xs);
-  background: transparent;
+  background: var(--panel);
   border: 1px solid var(--border-subtle);
-  color: inherit;
+  color: var(--text-primary);
   border-radius: var(--radius-sm);
   font-size: 13px;
+}
+
+.app-management select option {
+  background: var(--panel);
+  color: var(--text-primary);
 }
 
 @media (max-width: 800px) {
