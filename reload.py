@@ -71,6 +71,7 @@ try:
     # 7. DONE
 
     log('Update and reload complete!')
+    sleep(1)
 
 except CalledProcessError:
     print("\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
