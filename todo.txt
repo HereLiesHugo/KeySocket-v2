@@ -12,4 +12,3 @@ UX:
 
 Security:
     - Update UI and backend to prompt for passphrase if ssh key has one
-    - 
