@@ -22,40 +22,53 @@
 
   let term;
   let fit;
-  if (Terminal && typeof Terminal === 'function') {
-    term = new Terminal({
-      rendererType: 'dom', // Use DOM renderer for better font spacing
-      cursorBlink: true,
-      fontFamily: '"Fira Code", monospace',
-      fontSize: 12,
-      lineHeight: 1.2,
-      allowTransparency: false,
-      theme: {
-        background: '#0b1220',
-        foreground: '#cbd5e1'
+
+  // Wait until the font is loaded before initializing the terminal
+  document.fonts.ready.then(function () {
+    if (Terminal && typeof Terminal === 'function') {
+      term = new Terminal({
+        rendererType: 'dom', // Use DOM renderer for better font spacing
+        cursorBlink: true,
+        fontFamily: '"Fira Code", monospace',
+        fontSize: 12,
+        lineHeight: 1.2,
+        allowTransparency: false,
+        theme: {
+          background: '#0b1220',
+          foreground: '#cbd5e1'
+        }
+      });
+      if (FitAddon && (typeof FitAddon === 'function' || typeof FitAddon === 'object')) {
+        try { fit = new (FitAddon.FitAddon || FitAddon)(); } catch (e) { fit = new FitAddon(); }
+        try { term.loadAddon(fit); } catch (e) { /* ignore addon load errors */ }
       }
-    });
-    if (FitAddon && (typeof FitAddon === 'function' || typeof FitAddon === 'object')) {
-      try { fit = new (FitAddon.FitAddon || FitAddon)(); } catch (e) { fit = new FitAddon(); }
-      try { term.loadAddon(fit); } catch (e) { /* ignore addon load errors */ }
+      try { term.open(termEl); } catch (e) { console.error('term.open failed', e); }
+      try { if (fit && typeof fit.fit === 'function') fit.fit(); } catch (e) {}
+
+      // Expose terminal instance globally after it's initialized
+      window.KeySocket = { connect, disconnect, terminal: term };
+    } else {
+      fallbackTerminal();
     }
-    try { term.open(termEl); } catch (e) { console.error('term.open failed', e); }
-    try { if (fit && typeof fit.fit === 'function') fit.fit(); } catch (e) {}
-  } else {
-    // graceful fallback: create a minimal stub so rest of UI doesn't crash
-    console.error('xterm Terminal constructor not found on window');
-    term = {
-      write: (s) => { if (termEl) termEl.textContent += s; },
-      writeln: (s) => { if (termEl) termEl.textContent += s + '\n'; },
-      onData: () => {},
-      open: () => {},
-      focus: () => {},
-      cols: 80,
-      rows: 24,
-      loadAddon: () => {}
-    };
-    if (termEl) termEl.textContent = '\n[Terminal not available: xterm.js failed to load]\n';
+  });
+
+  function fallbackTerminal() {
+      // graceful fallback: create a minimal stub so rest of UI doesn't crash
+      console.error('xterm Terminal constructor not found on window');
+      term = {
+        write: (s) => { if (termEl) termEl.textContent += s; },
+        writeln: (s) => { if (termEl) termEl.textContent += s + '\n'; },
+        onData: () => {},
+        open: () => {},
+        focus: () => {},
+        cols: 80,
+        rows: 24,
+        loadAddon: () => {}
+      };
+      if (termEl) termEl.textContent = '\n[Terminal not available: xterm.js failed to load]\n';
+      window.KeySocket = { connect, disconnect, terminal: term };
   }
+
 
   let socket = null;
   let privateKeyText = null;
@@ -405,7 +418,4 @@
   window.ksInitTurnstile = initTurnstile;
 
   tryInitTurnstile();
-
-  // expose minimal helpers
-  window.KeySocket = { connect, disconnect, terminal: term };
 })();
