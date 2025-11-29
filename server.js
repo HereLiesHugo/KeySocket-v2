@@ -24,12 +24,12 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      // allow Cloudflare Turnstile and jsDelivr CDN for xterm
+      // allow Cloudflare Turnstile, jsDelivr CDN, and Google Fonts
       scriptSrc: ["'self'", "https://challenges.cloudflare.com", "https://cdn.jsdelivr.net"],
       frameSrc: ["https://challenges.cloudflare.com"],
       connectSrc: ["'self'", "https://challenges.cloudflare.com"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
-      fontSrc: ["'self'", "https://cdn.jsdelivr.net"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://cdn.jsdelivr.net", "https://fonts.gstatic.com"],
       imgSrc: ["'self'", "data:"],
     }
   },
@@ -64,7 +64,11 @@ app.get('/lib/xterm.js', (req, res) => {
 });
 app.get('/lib/xterm-addon-fit.js', (req, res) => {
   res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-  res.sendFile(path.join(__dirname, 'node_modules/@xterm/addon-fit/lib/xterm-addon-fit.js'));
+  res.sendFile(path.join(__dirname, 'node_modules/@xterm/addon-fit/lib/addon-fit.js'));
+});
+app.get('/lib/xterm-addon-webgl.js', (req, res) => {
+  res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+  res.sendFile(path.join(__dirname, 'node_modules/@xterm/addon-webgl/lib/addon-webgl.js'));
 });
 
 // Asset version for cache-busting: use env `ASSET_VERSION`, package.json version, or timestamp

@@ -38,7 +38,12 @@
             </section>
 
             <section class="terminal-area">
+                <div class="terminal-controls">
+                    <span style="font-size:11px;color:var(--muted);flex:1">Drag corner to resize, or use fullscreen</span>
+                    <button id="fullscreen-btn" type="button" title="Toggle fullscreen">⛶ Fullscreen</button>
+                </div>
                 <div id="terminal" class="terminal"></div>
+                <div class="resize-handle" id="resize-handle"></div>
             </section>
         </main>
 
@@ -54,9 +59,9 @@
         </div>
     </div>
 
-    <link rel="preload" href="js/app.js" as="script">
     <script src="/lib/xterm.js"></script>
     <script src="/lib/xterm-addon-fit.js"></script>
+    <script src="/lib/xterm-addon-webgl.js"></script>
     <!-- Load Turnstile and call window.ksInitTurnstile when ready -->
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=ksInitTurnstile&render=explicit" async defer></script>
     <script src="js/app.js?v=__ASSET_VERSION__"></script>

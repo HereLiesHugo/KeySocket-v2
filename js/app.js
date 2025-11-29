@@ -17,32 +17,66 @@
   const disconnectBtn = document.getElementById('disconnect-btn');
   const saveBtn = document.getElementById('save-conn');
   const savedList = document.getElementById('saved-list');
+  const fullscreenBtn = document.getElementById('fullscreen-btn');
+  const terminalArea = document.querySelector('.terminal-area');
+  const WebglAddon = (window.WebglAddon && (window.WebglAddon.WebglAddon || window.WebglAddon)) || null;
 
   let term;
   let fit;
-  if (Terminal && typeof Terminal === 'function') {
-    term = new Terminal({ cursorBlink: true });
-    if (FitAddon && (typeof FitAddon === 'function' || typeof FitAddon === 'object')) {
-      try { fit = new (FitAddon.FitAddon || FitAddon)(); } catch (e) { fit = new FitAddon(); }
-      try { term.loadAddon(fit); } catch (e) { /* ignore addon load errors */ }
+
+  // Wait until the font is loaded before initializing the terminal
+  document.fonts.ready.then(function () {
+    if (Terminal && typeof Terminal === 'function') {
+      term = new Terminal({
+        rendererType: 'webgl', // Use WebGL renderer
+        cursorBlink: true,
+        fontFamily: "'Menlo', 'Monaco', 'Courier New', monospace",
+        fontSize: 14,
+        allowTransparency: false,
+        theme: {
+          background: '#0b1220',
+          foreground: '#cbd5e1'
+        }
+      });
+
+      // Load addons
+      if (FitAddon && (typeof FitAddon === 'function' || typeof FitAddon === 'object')) {
+        try { fit = new (FitAddon.FitAddon || FitAddon)(); } catch (e) { fit = new FitAddon(); }
+        try { term.loadAddon(fit); } catch (e) { /* ignore addon load errors */ }
+      }
+      if (WebglAddon && (typeof WebglAddon === 'function' || typeof WebglAddon === 'object')) {
+        try { term.loadAddon(new (WebglAddon.WebglAddon || WebglAddon)()); } catch (e) { console.error('WebGL addon failed to load', e); }
+      } else {
+        console.error('WebGL addon not found');
+      }
+
+      try { term.open(termEl); } catch (e) { console.error('term.open failed', e); }
+      try { if (fit && typeof fit.fit === 'function') fit.fit(); } catch (e) {}
+
+      // Expose terminal instance globally after it's initialized
+      window.KeySocket = { connect, disconnect, terminal: term };
+    } else {
+      fallbackTerminal();
     }
-    try { term.open(termEl); } catch (e) { console.error('term.open failed', e); }
-    try { if (fit && typeof fit.fit === 'function') fit.fit(); } catch (e) {}
-  } else {
-    // graceful fallback: create a minimal stub so rest of UI doesn't crash
-    console.error('xterm Terminal constructor not found on window');
-    term = {
-      write: (s) => { if (termEl) termEl.textContent += s; },
-      writeln: (s) => { if (termEl) termEl.textContent += s + '\n'; },
-      onData: () => {},
-      open: () => {},
-      focus: () => {},
-      cols: 80,
-      rows: 24,
-      loadAddon: () => {}
-    };
-    if (termEl) termEl.textContent = '\n[Terminal not available: xterm.js failed to load]\n';
+  });
+
+  function fallbackTerminal() {
+      // graceful fallback: create a minimal stub so rest of UI doesn't crash
+      console.error('xterm Terminal constructor not found on window');
+      term = {
+        write: (s) => { if (termEl) termEl.textContent += s; },
+        writeln: (s) => { if (termEl) termEl.textContent += s + '\n'; },
+        onData: () => {},
+        open: () => {},
+        focus: () => {},
+        cols: 80,
+        rows: 24,
+        loadAddon: () => {}
+      };
+      if (termEl) termEl.textContent = '\n[Terminal not available: xterm.js failed to load]\n';
+      window.KeySocket = { connect, disconnect, terminal: term };
   }
+
 
   let socket = null;
   let privateKeyText = null;
@@ -65,7 +99,59 @@
   authSelect.addEventListener('change', setAuthUI);
   setAuthUI();
 
-  window.addEventListener('resize', () => { try { fit.fit(); } catch (e) {} });
+  // Resize handle for terminal-area
+  const resizeHandle = document.getElementById('resize-handle');
+  let isResizing = false;
+  let startX, startY, startWidth, startHeight;
+
+  resizeHandle.addEventListener('mousedown', (e) => {
+    isResizing = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    startWidth = terminalArea.offsetWidth;
+    startHeight = terminalArea.offsetHeight;
+    document.addEventListener('mousemove', handleResize);
+    document.addEventListener('mouseup', stopResize);
+  });
+
+  function handleResize(e) {
+    if (!isResizing) return;
+    const deltaX = e.clientX - startX;
+    const deltaY = e.clientY - startY;
+    const newWidth = Math.max(300, startWidth + deltaX);
+    const newHeight = Math.max(200, startHeight + deltaY);
+    terminalArea.style.width = newWidth + 'px';
+    terminalArea.style.height = newHeight + 'px';
+    // Trigger terminal resize
+    if (fit && typeof fit.fit === 'function') {
+      try { fit.fit(); } catch (e) {}
+    }
+  }
+
+  function stopResize() {
+    isResizing = false;
+    document.removeEventListener('mousemove', handleResize);
+    document.removeEventListener('mouseup', stopResize);
+  }
+
+  // Fullscreen toggle
+  function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+      terminalArea.requestFullscreen().catch(err => console.error('Fullscreen request failed:', err));
+      fullscreenBtn.textContent = '⛶ Exit Fullscreen';
+    } else {
+      document.exitFullscreen();
+      fullscreenBtn.textContent = '⛶ Fullscreen';
+    }
+  }
+  fullscreenBtn.addEventListener('click', toggleFullscreen);
+  document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement) {
+      fullscreenBtn.textContent = '⛶ Fullscreen';
+    }
+  });
+
+
 
   keyfileInput.addEventListener('change', (e) => {
     const f = e.target.files[0];
@@ -193,7 +279,16 @@
       const rows = term.rows;
       socket.send(JSON.stringify({ type: 'resize', cols, rows }));
     }
-    window.addEventListener('resize', () => { fit.fit(); sendResize(); });
+    function doResize() {
+      if (fit && typeof fit.fit === 'function') {
+        try { fit.fit(); } catch (e) { console.error('fit.fit error:', e); }
+      }
+      sendResize();
+    }
+    window.addEventListener('resize', doResize);
+    // Watch for terminal-area resizing
+    const resizeObserver = new ResizeObserver(() => { doResize(); });
+    resizeObserver.observe(terminalArea);
     setTimeout(sendResize, 250);
   }
 
@@ -331,7 +426,4 @@
   window.ksInitTurnstile = initTurnstile;
 
   tryInitTurnstile();
-
-  // expose minimal helpers
-  window.KeySocket = { connect, disconnect, terminal: term };
 })();
