@@ -35,9 +35,11 @@ try:
     log('Checking nginx status...')
     # Added --no-pager so the script doesn't freeze
     call('sudo systemctl status nginx --no-pager', shell=True)
+    sleep(1)
 
     log('Checking pm2 status...')
     call('pm2 status keysocket', shell=True)
+    sleep(1)
 
     log('Update and reload complete!')
 
