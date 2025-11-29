@@ -622,15 +622,8 @@
         } catch (e) { console.error('reRunTurnstile', e); }
     }
 
-    // initialize on DOM ready or when Cloudflare script loads
-    function tryInitTurnstile() {
-        if (window.turnstile) initTurnstile();
-        else if (document.readyState === 'complete' || document.readyState === 'interactive') initTurnstile();
-        else window.addEventListener('DOMContentLoaded', initTurnstile);
-    }
-
     // expose callback for Cloudflare Turnstile onload
     window.ksInitTurnstile = initTurnstile;
 
-    tryInitTurnstile();
+    checkAuthStatus();
 })();
