@@ -425,22 +425,26 @@
         if (appManagementToggle && appManagementOverlay) {
             appManagementToggle.addEventListener('click', () => {
                 appManagementOverlay.hidden = false;
+                appManagementOverlay.style.display = 'flex';
             });
         }
         if (appManagementClose && appManagementOverlay) {
             appManagementClose.addEventListener('click', () => {
                 appManagementOverlay.hidden = true;
+                appManagementOverlay.style.display = 'none';
             });
         }
         if (appManagementOverlay) {
             appManagementOverlay.addEventListener('click', (e) => {
                 if (e.target === appManagementOverlay) {
                     appManagementOverlay.hidden = true;
+                    appManagementOverlay.style.display = 'none';
                 }
             });
             document.addEventListener('keydown', (e) => {
                 if (e.key === 'Escape' && !appManagementOverlay.hidden) {
                     appManagementOverlay.hidden = true;
+                    appManagementOverlay.style.display = 'none';
                 }
             });
         }
@@ -465,7 +469,10 @@
                     form.username.value = conn.username || '';
                     if (authSelect) authSelect.value = conn.auth || 'password';
                     setAuthUI();
-                    if (appManagementOverlay) appManagementOverlay.hidden = true;
+                    if (appManagementOverlay) {
+                        appManagementOverlay.hidden = true;
+                        appManagementOverlay.style.display = 'none';
+                    }
                     try {
                         form.scrollIntoView({ behavior: 'smooth', block: 'start' });
                     } catch (e2) {}
