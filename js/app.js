@@ -19,6 +19,7 @@
   const savedList = document.getElementById('saved-list');
   const fullscreenBtn = document.getElementById('fullscreen-btn');
   const terminalArea = document.querySelector('.terminal-area');
+  const WebglAddon = (window.WebglAddon && (window.WebglAddon.WebglAddon || window.WebglAddon)) || null;
 
   let term;
   let fit;
@@ -27,21 +28,28 @@
   document.fonts.ready.then(function () {
     if (Terminal && typeof Terminal === 'function') {
       term = new Terminal({
-        rendererType: 'dom', // Use DOM renderer for better font spacing
+        rendererType: 'webgl', // Use WebGL renderer
         cursorBlink: true,
-        fontFamily: '"Fira Code", monospace',
-        fontSize: 12,
-        lineHeight: 1.2,
+        fontFamily: "'Menlo', 'Monaco', 'Courier New', monospace",
+        fontSize: 14,
         allowTransparency: false,
         theme: {
           background: '#0b1220',
           foreground: '#cbd5e1'
         }
       });
+
+      // Load addons
       if (FitAddon && (typeof FitAddon === 'function' || typeof FitAddon === 'object')) {
         try { fit = new (FitAddon.FitAddon || FitAddon)(); } catch (e) { fit = new FitAddon(); }
         try { term.loadAddon(fit); } catch (e) { /* ignore addon load errors */ }
       }
+      if (WebglAddon && (typeof WebglAddon === 'function' || typeof WebglAddon === 'object')) {
+        try { term.loadAddon(new (WebglAddon.WebglAddon || WebglAddon)()); } catch (e) { console.error('WebGL addon failed to load', e); }
+      } else {
+        console.error('WebGL addon not found');
+      }
+
       try { term.open(termEl); } catch (e) { console.error('term.open failed', e); }
       try { if (fit && typeof fit.fit === 'function') fit.fit(); } catch (e) {}
 

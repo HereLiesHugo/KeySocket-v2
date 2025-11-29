@@ -66,6 +66,10 @@ app.get('/lib/xterm-addon-fit.js', (req, res) => {
   res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
   res.sendFile(path.join(__dirname, 'node_modules/@xterm/addon-fit/lib/addon-fit.js'));
 });
+app.get('/lib/xterm-addon-webgl.js', (req, res) => {
+  res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+  res.sendFile(path.join(__dirname, 'node_modules/@xterm/addon-webgl/lib/addon-webgl.js'));
+});
 
 // Asset version for cache-busting: use env `ASSET_VERSION`, package.json version, or timestamp
 const ASSET_VERSION = process.env.ASSET_VERSION || (() => {
