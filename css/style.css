@@ -29,6 +29,9 @@
 
   /* Transitions */
   --transition-fast: 150ms ease;
+  --transition-smooth: 250ms ease;
+  --transition-bounce: 300ms cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  --transition-fade: 400ms ease;
 }
 
 /* ============================================================================
@@ -43,11 +46,38 @@ body {
   margin: 0;
   background: linear-gradient(180deg, #071426 0%, #071729 100%);
   color: var(--text-primary);
+  animation: fadeIn var(--transition-fade) ease;
 }
 
 button {
   font-family: inherit;
   font-size: inherit;
+}
+
+/* Entrance animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* App entrance */
+.app {
+  animation: slideUp var(--transition-fade) ease;
 }
 
 /* ============================================================================
@@ -67,17 +97,25 @@ button {
   border-radius: var(--radius-md);
   background: var(--glass);
   margin-bottom: var(--spacing-md);
+  transition: transform var(--transition-smooth), box-shadow var(--transition-smooth);
+}
+
+.topbar:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
 }
 
 .topbar h1 {
   margin: 0;
   font-size: 18px;
+  transition: color var(--transition-fast);
 }
 
 .domain {
   font-size: 13px;
   color: var(--muted);
   text-align: right;
+  transition: color var(--transition-fast);
 }
 
 .domain a {
@@ -88,6 +126,8 @@ button {
 
 .domain a:hover {
   color: #ffffff;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 main {
@@ -95,6 +135,7 @@ main {
   grid-template-columns: 340px 1fr;
   gap: var(--spacing-md);
   align-items: start;
+  animation: fadeIn var(--transition-fade) ease 100ms both;
 }
 
 /* ============================================================================
@@ -104,12 +145,20 @@ main {
   background: var(--panel);
   padding: var(--spacing-md);
   border-radius: var(--radius-md);
+  transition: transform var(--transition-smooth), box-shadow var(--transition-smooth);
+  animation: slideUp var(--transition-fade) ease 200ms both;
+}
+
+.connect:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
 }
 
 .connect label {
   display: block;
   margin-bottom: var(--spacing-sm);
   font-size: 13px;
+  transition: color var(--transition-fast);
 }
 
 .connect input,
@@ -121,7 +170,7 @@ main {
   border: 1px solid var(--border-subtle);
   color: inherit;
   border-radius: var(--radius-sm);
-  transition: border-color var(--transition-fast);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
 }
 
 .connect input:hover,
@@ -130,6 +179,8 @@ main {
 .connect select:focus {
   border-color: var(--border-light);
   outline: none;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .actions {
@@ -148,17 +199,27 @@ main {
   cursor: pointer;
   font-size: 13px;
   font-weight: 500;
-  transition: background-color var(--transition-fast);
+  transition: background-color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .actions button:hover,
 .actions select:hover {
   background-color: #0fb8b7;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(14, 184, 183, 0.3);
+}
+
+.actions button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(14, 184, 183, 0.2);
+  transition: transform 60ms ease, box-shadow 60ms ease;
 }
 
 .actions button[disabled] {
   opacity: 0.5;
   cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 /* ============================================================================
@@ -175,6 +236,13 @@ main {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  transition: border-color var(--transition-smooth), box-shadow var(--transition-smooth);
+  animation: slideUp var(--transition-fade) ease 300ms both;
+}
+
+.terminal-area:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(110, 231, 183, 0.1);
 }
 
 .terminal-controls {
@@ -201,17 +269,20 @@ main {
   cursor: pointer;
   font-size: 12px;
   font-weight: 500;
-  transition: background-color var(--transition-fast);
+  transition: background-color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .terminal-controls button:hover {
   background-color: #0fb8b7;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(14, 184, 183, 0.25);
 }
 
 #terminal {
   flex: 1;
   width: 100%;
   min-height: 400px;
+  transition: opacity var(--transition-smooth);
 }
 
 /* Override xterm.js default font settings for consistent character spacing */
@@ -242,11 +313,12 @@ main {
   border-radius: 0 0 var(--radius-md) 0;
   opacity: 0.6;
   z-index: 10;
-  transition: opacity var(--transition-fast);
+  transition: opacity var(--transition-fast), transform var(--transition-fast);
 }
 
 .resize-handle:hover {
   opacity: 1;
+  transform: scale(1.15);
 }
 
 /* ============================================================================
@@ -262,6 +334,7 @@ main {
   margin: 0;
   border: none;
   border-radius: 0;
+  animation: fadeIn var(--transition-fade) ease;
 }
 
 #terminal:fullscreen,
@@ -280,6 +353,7 @@ main {
   text-align: center;
   color: var(--muted);
   font-size: 13px;
+  animation: fadeIn var(--transition-fade) ease 400ms both;
 }
 
 /* ============================================================================
@@ -294,21 +368,44 @@ main {
   cursor: pointer;
   background: var(--glass);
   color: var(--text-primary);
+  transition: opacity var(--transition-fade), transform var(--transition-smooth), box-shadow var(--transition-smooth);
+  animation: slideDown var(--transition-smooth) ease;
+}
+
+.auth-banner:not([hidden]) {
+  animation: slideDown var(--transition-smooth) ease;
+}
+
+.auth-banner[hidden] {
+  display: none;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-12px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .auth-banner--success {
   background: #16a34a;
   color: #ecfdf3;
+  box-shadow: 0 4px 12px rgba(22, 163, 74, 0.2);
 }
 
 .auth-banner--error {
   background: #b91c1c;
   color: #fee2e2;
+  box-shadow: 0 4px 12px rgba(185, 28, 28, 0.2);
 }
 
 .auth-banner--info {
   background: #0ea5e9;
   color: #e0f2fe;
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.2);
+}
+
+.auth-banner:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
 }
 
 /* ============================================================================
@@ -323,6 +420,8 @@ main {
   border-radius: var(--radius-md);
   border: 1px solid var(--border-light);
   user-select: none;
+  transition: opacity var(--transition-smooth), transform var(--transition-smooth);
+  animation: slideUp var(--transition-fade) ease 500ms both;
 }
 
 .keyboard-row {
@@ -347,7 +446,7 @@ main {
   font-family: var(--font-sans);
   font-size: 14px;
   cursor: pointer;
-  transition: background-color var(--transition-fast);
+  transition: background-color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
 }
 
 .keyboard-key:active,
@@ -355,6 +454,15 @@ main {
   background: var(--accent);
   color: #042024;
   border-color: var(--accent);
+  transform: translateY(-2px) scale(0.98);
+  box-shadow: 0 2px 8px rgba(110, 231, 183, 0.3);
+  transition: transform 60ms ease, box-shadow 60ms ease, background-color 60ms ease;
+}
+
+.keyboard-key:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }
 
 /* Style for the language switcher key */
@@ -386,11 +494,13 @@ main {
   cursor: pointer;
   font-size: 13px;
   font-weight: 500;
-  transition: background-color var(--transition-fast);
+  transition: background-color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .app-management-btn:hover {
   background-color: #0fb8b7;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(14, 184, 183, 0.25);
 }
 
 .app-management-overlay {
@@ -401,6 +511,14 @@ main {
   justify-content: center;
   background: rgba(0, 0, 0, 0.55);
   z-index: 2000;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--transition-fade), visibility var(--transition-fade);
+}
+
+.app-management-overlay:not([hidden]) {
+  opacity: 1;
+  visibility: visible;
 }
 
 .app-management {
@@ -412,6 +530,14 @@ main {
   background: var(--panel);
   border: 1px solid var(--border-light);
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65);
+  transform: scale(0.95) translateY(20px);
+  opacity: 0;
+  transition: transform var(--transition-bounce), opacity var(--transition-fade);
+}
+
+.app-management-overlay:not([hidden]) .app-management {
+  transform: scale(1) translateY(0);
+  opacity: 1;
 }
 
 .app-management-header {
@@ -430,11 +556,13 @@ main {
   cursor: pointer;
   font-size: 12px;
   font-weight: 500;
-  transition: background-color var(--transition-fast);
+  transition: background-color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .app-management-close:hover {
   background-color: #0fb8b7;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(14, 184, 183, 0.25);
 }
 
 .app-management-grid {
@@ -446,6 +574,7 @@ main {
 .app-management-section h3 {
   margin-top: 0;
   margin-bottom: var(--spacing-xs);
+  transition: color var(--transition-fast);
 }
 
 .app-management-help {
@@ -453,6 +582,7 @@ main {
   margin-bottom: var(--spacing-md);
   font-size: 12px;
   color: var(--muted);
+  transition: color var(--transition-fast);
 }
 
 .connections-list {
@@ -470,6 +600,14 @@ main {
   background: var(--glass);
   border: 1px solid var(--border-subtle);
   font-size: 13px;
+  transition: transform var(--transition-smooth), box-shadow var(--transition-smooth), border-color var(--transition-smooth);
+  animation: fadeIn var(--transition-smooth) ease;
+}
+
+.connection-item:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border-color: var(--border-light);
 }
 
 .connection-meta {
@@ -480,11 +618,13 @@ main {
 
 .connection-meta-main {
   font-weight: 500;
+  transition: color var(--transition-fast);
 }
 
 .connection-meta-sub {
   font-size: 12px;
   color: var(--muted);
+  transition: color var(--transition-fast);
 }
 
 .connection-actions {
@@ -498,6 +638,7 @@ main {
   border: 0;
   font-size: 11px;
   cursor: pointer;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), background-color var(--transition-fast);
 }
 
 .connection-actions .edit-btn {
@@ -512,10 +653,14 @@ main {
 
 .connection-actions .edit-btn:hover {
   background: #0284c7;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.3);
 }
 
 .connection-actions .delete-btn:hover {
   background: #991b1b;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(153, 27, 27, 0.3);
 }
 
 .app-management select {
@@ -527,6 +672,13 @@ main {
   color: var(--text-primary);
   border-radius: var(--radius-sm);
   font-size: 13px;
+  transition: border-color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.app-management select:hover {
+  border-color: var(--border-light);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
 }
 
 .app-management select option {
