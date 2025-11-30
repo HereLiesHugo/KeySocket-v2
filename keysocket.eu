@@ -56,7 +56,11 @@ server {
 
     # FIX: Content Security Policy to resolve console errors
     # Added 'ws:' and 'wss:' to connect-src to allow WebSocket connections for Nginx UI
+    # SEO: Allow indexing and proper meta tags
     add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com https://cdn.jsdelivr.net https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' ws: wss: https://cloudflareinsights.com https://challenges.cloudflare.com; frame-src 'self' https://challenges.cloudflare.com;" always;
+    
+    # SEO: Additional headers for search engines
+    add_header X-Robots-Tag "index, follow, all" always;
 
     # Limits
     client_max_body_size 50M;
@@ -70,6 +74,36 @@ server {
 
     if ($is_bad_bot) {
         return 444;
+    }
+
+    # Remove file extensions from URLs - Specific handling for landing page
+    # Redirect .html to clean URL
+    location ~ ^/(landing|index)\.html$ {
+        return 301 /$1;
+    }
+    
+    # Serve landing page without extension by proxying to landing.html
+    location = /landing {
+        proxy_pass http://127.0.0.1:3000/landing.html;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        proxy_hide_header Content-Security-Policy;
+    }
+
+    # Serve index page without extension by proxying to index.html
+    location = /index {
+        proxy_pass http://127.0.0.1:3000/index.html;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        proxy_hide_header Content-Security-Policy;
     }
 
     # WebSocket endpoint - keep long timeouts and disable buffering
@@ -109,9 +143,48 @@ server {
         proxy_cache_bypass $http_upgrade;
     }
 
+    # SEO: Serve sitemap.xml with proper headers and caching
+    location = /sitemap.xml {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # Ensure we don't override the application's Content-Type
+        proxy_hide_header Content-Type;
+        
+        # Add proper caching
+        add_header Cache-Control "public, max-age=3600, s-maxage=86400" always;
+        access_log off;
+        
+        # Don't buffer the response
+        proxy_buffering off;
+    }
+
+    # SEO: Serve robots.txt with proper headers and caching
     location = /robots.txt {
-        add_header Content-Type text/plain;
-        add_header Cache-Control "no-store, no-cache, must-revalidate";
-        return 200 "User-agent: *\nDisallow: /\n";
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # Ensure we don't override the application's Content-Type
+        proxy_hide_header Content-Type;
+        
+        # Add proper caching
+        add_header Cache-Control "public, max-age=3600, s-maxage=86400" always;
+        access_log off;
+        
+        # Don't buffer the response
+        proxy_buffering off;
+    }
+
+    # SEO: Optional OG image placeholder (create this file if you want custom social images)
+    location = /og-image.png {
+        root /var/www/keysocket;
+        add_header Cache-Control "public, max-age=86400, s-maxage=604800";
+        try_files $uri =404;
     }
 }

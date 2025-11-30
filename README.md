@@ -2,6 +2,7 @@
 
 ## Website:
 ### https://keysocket.eu
+### https://keysocket.eu/landing
 
 I thought there weren't enough free web ssh clients.
 So here, a free web ssh client with modern styling.
