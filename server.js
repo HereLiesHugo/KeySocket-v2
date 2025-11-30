@@ -179,7 +179,7 @@ app.get('/health', (req, res) => res.json({ ok: true, env: process.env.NODE_ENV 
 // Sitemap endpoint
 app.get('/sitemap.xml', (req, res) => {
   res.setHeader('Content-Type', 'application/xml; charset=utf-8');
-  const sitemapPath = path.join(__dirname, 'public', 'sitemap.xml');
+  const sitemapPath = path.join(__dirname, 'sitemap.xml');
   if (fs.existsSync(sitemapPath)) {
     return res.sendFile(sitemapPath);
   }
