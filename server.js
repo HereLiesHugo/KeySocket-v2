@@ -15,22 +15,6 @@ const { Client } = require('ssh2');
 const { URL } = require('url');
 const cookie = require('cookie');
 
-// Create a write stream for logging
-const logStream = fs.createWriteStream(path.join(__dirname, 'server.log'), { flags: 'a' });
-
-// Override console.log to also write to file
-const originalConsoleLog = console.log;
-console.log = function(...args) {
-  originalConsoleLog.apply(console, args);
-  logStream.write(new Date().toISOString() + ' - ' + args.join(' ') + '\n');
-};
-
-const originalConsoleError = console.error;
-console.error = function(...args) {
-  originalConsoleError.apply(console, args);
-  logStream.write(new Date().toISOString() + ' - ERROR: ' + args.join(' ') + '\n');
-};
-
 const app = express();
 
 // ensure secure cookies (sessions) work when behind a proxy/CDN like Cloudflare
@@ -82,16 +66,16 @@ app.use(helmet({
 app.use(express.json({ limit: '200kb' }));
 app.use(express.urlencoded({ extended: false }));
 
-// Session store reference for WebSocket authentication
-let sessionStore;
-
 // Session parser for WebSocket connections
 function parseWebSocketSession(cookieHeader, callback) {
-  const logFile = path.join(__dirname, 'server.log');
   const logMessage = (msg) => {
     const timestamp = new Date().toISOString();
     const logEntry = `${timestamp} - ${msg}\n`;
-    fs.appendFileSync(logFile, logEntry);
+    try {
+      fs.appendFileSync(path.join(__dirname, 'server.log'), logEntry);
+    } catch (e) {
+      // If file logging fails, just console.log
+    }
     console.log(msg);
   };
   
@@ -173,12 +157,17 @@ const sessionConfig = {
   }
 };
 
+// Create session store explicitly
+const MemoryStore = require('express-session').MemoryStore;
+const sessionStore = new MemoryStore();
+
 // Initialize session middleware first
-const sessionMiddleware = session(sessionConfig);
+const sessionMiddleware = session({
+  ...sessionConfig,
+  store: sessionStore
+});
 app.use(sessionMiddleware);
 
-// Store session store reference for WebSocket authentication
-sessionStore = sessionMiddleware.store;
 console.log(`[Server] Session store type: ${typeof sessionStore}`);
 console.log(`[Server] Session store has get method: ${typeof sessionStore.get}`);
 
