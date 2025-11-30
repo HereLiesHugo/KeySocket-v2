@@ -15,6 +15,22 @@ const { Client } = require('ssh2');
 const { URL } = require('url');
 const cookie = require('cookie');
 
+// Create a write stream for logging
+const logStream = fs.createWriteStream(path.join(__dirname, 'server.log'), { flags: 'a' });
+
+// Override console.log to also write to file
+const originalConsoleLog = console.log;
+console.log = function(...args) {
+  originalConsoleLog.apply(console, args);
+  logStream.write(new Date().toISOString() + ' - ' + args.join(' ') + '\n');
+};
+
+const originalConsoleError = console.error;
+console.error = function(...args) {
+  originalConsoleError.apply(console, args);
+  logStream.write(new Date().toISOString() + ' - ERROR: ' + args.join(' ') + '\n');
+};
+
 const app = express();
 
 // ensure secure cookies (sessions) work when behind a proxy/CDN like Cloudflare
@@ -71,8 +87,16 @@ let sessionStore;
 
 // Session parser for WebSocket connections
 function parseWebSocketSession(cookieHeader, callback) {
+  const logFile = path.join(__dirname, 'server.log');
+  const logMessage = (msg) => {
+    const timestamp = new Date().toISOString();
+    const logEntry = `${timestamp} - ${msg}\n`;
+    fs.appendFileSync(logFile, logEntry);
+    console.log(msg);
+  };
+  
   if (!cookieHeader) {
-    console.log(`[WebSocket] No cookie header provided`);
+    logMessage(`[WebSocket] No cookie header provided`);
     return callback(null, null);
   }
   
@@ -80,10 +104,10 @@ function parseWebSocketSession(cookieHeader, callback) {
     const cookies = cookie.parse(cookieHeader);
     const sessionId = cookies['connect.sid'];
     
-    console.log(`[WebSocket] Session ID from cookie: ${sessionId ? sessionId.substring(0, 20) + '...' : 'null'}`);
+    logMessage(`[WebSocket] Session ID from cookie: ${sessionId ? sessionId.substring(0, 20) + '...' : 'null'}`);
     
     if (!sessionId) {
-      console.log(`[WebSocket] No connect.sid found in cookies`);
+      logMessage(`[WebSocket] No connect.sid found in cookies`);
       return callback(null, null);
     }
     
@@ -93,36 +117,36 @@ function parseWebSocketSession(cookieHeader, callback) {
       cleanSessionId = sessionId.slice(2).split('.')[0];
     }
     
-    console.log(`[WebSocket] Clean session ID: ${cleanSessionId}`);
+    logMessage(`[WebSocket] Clean session ID: ${cleanSessionId}`);
     
     // Get session from store
     sessionStore.get(cleanSessionId, (err, session) => {
       if (err) {
-        console.log(`[WebSocket] Error getting session: ${err.message}`);
+        logMessage(`[WebSocket] Error getting session: ${err.message}`);
         return callback(err, null);
       }
       
       if (!session) {
-        console.log(`[WebSocket] No session found for ID: ${cleanSessionId}`);
+        logMessage(`[WebSocket] No session found for ID: ${cleanSessionId}`);
         return callback(null, null);
       }
       
-      console.log(`[WebSocket] Session found, checking authentication...`);
+      logMessage(`[WebSocket] Session found, checking authentication...`);
       
       // Check if user is authenticated via Passport
       if (session.passport && session.passport.user) {
-        console.log(`[WebSocket] User authenticated: ${session.passport.user.email}`);
+        logMessage(`[WebSocket] User authenticated: ${session.passport.user.email}`);
         return callback(null, {
           authenticated: true,
           user: session.passport.user
         });
       }
       
-      console.log(`[WebSocket] Session found but user not authenticated`);
+      logMessage(`[WebSocket] Session found but user not authenticated`);
       return callback(null, null);
     });
   } catch (error) {
-    console.log(`[WebSocket] Exception parsing session: ${error.message}`);
+    logMessage(`[WebSocket] Exception parsing session: ${error.message}`);
     callback(null, null);
   }
 }
