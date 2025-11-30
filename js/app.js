@@ -774,7 +774,8 @@
             console.error('ws error', err);
             
             // Check if this is an authentication error
-            if (err.code === 1008 || err.message.includes('401') || err.message.includes('Unauthorized')) {
+            const errorMessage = err.message || '';
+            if (err.code === 1008 || errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
                 showConnectionBanner('Authentication required. Please complete Google OAuth login.', 'error');
                 try { term.writeln('\r\n[ERROR] Authentication required - please complete login first'); } catch (e) {}
                 // Re-run authentication check

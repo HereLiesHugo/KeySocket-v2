@@ -72,6 +72,7 @@ let sessionStore;
 // Session parser for WebSocket connections
 function parseWebSocketSession(cookieHeader, callback) {
   if (!cookieHeader) {
+    console.log(`[WebSocket] No cookie header provided`);
     return callback(null, null);
   }
   
@@ -79,30 +80,49 @@ function parseWebSocketSession(cookieHeader, callback) {
     const cookies = cookie.parse(cookieHeader);
     const sessionId = cookies['connect.sid'];
     
+    console.log(`[WebSocket] Session ID from cookie: ${sessionId ? sessionId.substring(0, 20) + '...' : 'null'}`);
+    
     if (!sessionId) {
+      console.log(`[WebSocket] No connect.sid found in cookies`);
       return callback(null, null);
     }
     
-    // Remove the 's:' prefix if present and decode the session ID
-    const cleanSessionId = sessionId.replace(/^s:/, '').split('.')[0];
+    // Remove the 's:' prefix and decode if necessary
+    let cleanSessionId = sessionId;
+    if (sessionId.startsWith('s:')) {
+      cleanSessionId = sessionId.slice(2).split('.')[0];
+    }
+    
+    console.log(`[WebSocket] Clean session ID: ${cleanSessionId}`);
     
     // Get session from store
     sessionStore.get(cleanSessionId, (err, session) => {
-      if (err || !session) {
+      if (err) {
+        console.log(`[WebSocket] Error getting session: ${err.message}`);
+        return callback(err, null);
+      }
+      
+      if (!session) {
+        console.log(`[WebSocket] No session found for ID: ${cleanSessionId}`);
         return callback(null, null);
       }
       
+      console.log(`[WebSocket] Session found, checking authentication...`);
+      
       // Check if user is authenticated via Passport
       if (session.passport && session.passport.user) {
+        console.log(`[WebSocket] User authenticated: ${session.passport.user.email}`);
         return callback(null, {
           authenticated: true,
           user: session.passport.user
         });
       }
       
+      console.log(`[WebSocket] Session found but user not authenticated`);
       return callback(null, null);
     });
   } catch (error) {
+    console.log(`[WebSocket] Exception parsing session: ${error.message}`);
     callback(null, null);
   }
 }
