@@ -158,7 +158,8 @@ if (!fs.existsSync(sessionsDir)) {
 const sessionStore = new FileStore({ 
   path: sessionsDir, 
   ttl: 86400, // 24 hours
-  retries: 0
+  retries: 0,
+  reapInterval: 3600000 // Clean up expired sessions every hour (in milliseconds)
 });
 
 const sessionConfig = {
@@ -180,6 +181,40 @@ app.use(sessionMiddleware);
 
 console.log(`[Server] Session store type: ${typeof sessionStore}`);
 console.log(`[Server] Session store has get method: ${typeof sessionStore.get}`);
+
+// Clean up expired sessions on startup
+function cleanupExpiredSessions() {
+  try {
+    console.log('[Server] Cleaning up expired sessions...');
+    if (sessionStore && typeof sessionStore.clear === 'function') {
+      // FileStore doesn't have a direct clear method, but we can clean the directory
+      const files = fs.readdirSync(sessionsDir);
+      let cleanedCount = 0;
+      
+      files.forEach(file => {
+        const filePath = path.join(sessionsDir, file);
+        const stats = fs.statSync(filePath);
+        const fileAge = Date.now() - stats.mtime.getTime();
+        
+        // Remove files older than 24 hours
+        if (fileAge > 24 * 60 * 60 * 1000) {
+          fs.unlinkSync(filePath);
+          cleanedCount++;
+        }
+      });
+      
+      console.log(`[Server] Cleaned up ${cleanedCount} expired session files`);
+    }
+  } catch (error) {
+    console.log('[Server] Error during session cleanup:', error.message);
+  }
+}
+
+// Run cleanup on startup
+cleanupExpiredSessions();
+
+// Run periodic cleanup every 6 hours
+setInterval(cleanupExpiredSessions, 6 * 60 * 60 * 1000);
 
 app.use(passport.initialize());
 app.use(passport.session());
