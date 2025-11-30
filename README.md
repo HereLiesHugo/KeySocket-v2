@@ -1,17 +1,17 @@
 # KeySocket: A Secure Web SSH Gateway
 
+## Support
+
+If you find this project useful, please consider supporting its development:
+- **Website:** [maturqu.com](https://maturqu.com)
+- **Ko-fi:** [Support on Ko-fi](https://ko-fi.com/maturqu)
+
 ## Website:
 ### https://keysocket.eu - Landing Page
 ### https://keysocket.eu/console - Console
 
 I thought there weren't enough free web ssh clients.
 So here, a free web ssh client with modern styling.
-
-## Support
-
-If you find this project useful, please consider supporting its development:
-- **Website:** [maturqu.com](https://maturqu.com)
-- **Ko-fi:** [Support on Ko-fi](https://ko-fi.com/maturqu)
 
 Here's the boring version:
 
