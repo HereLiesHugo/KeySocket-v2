@@ -158,6 +158,18 @@ const ASSET_VERSION = process.env.ASSET_VERSION || (() => {
   try { return require(path.join(__dirname, 'package.json')).version || String(Date.now()); } catch (e) { return String(Date.now()); }
 })();
 
+function serveConsole(req, res) {
+  try {
+    const consolePath = path.join(__dirname, 'console.html');
+    let html = fs.readFileSync(consolePath, 'utf8');
+    html = html.replace(/__ASSET_VERSION__/g, ASSET_VERSION);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.send(html);
+  } catch (e) {
+    return res.status(500).send('Server error');
+  }
+}
+
 function serveIndex(req, res) {
   try {
     // Always serve the same HTML - let frontend handle authentication logic
@@ -173,6 +185,8 @@ function serveIndex(req, res) {
 
 app.get('/', serveIndex);
 app.get('/index.html', serveIndex);
+app.get('/console', serveConsole);
+app.get('/console.html', serveConsole);
 
 app.get('/health', (req, res) => res.json({ ok: true, env: process.env.NODE_ENV || 'development' }));
 

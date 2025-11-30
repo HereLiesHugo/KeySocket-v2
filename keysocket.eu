@@ -76,15 +76,15 @@ server {
         return 444;
     }
 
-    # Remove file extensions from URLs - Specific handling for landing page
+    # Remove file extensions from URLs - Specific handling for console page
     # Redirect .html to clean URL
-    location ~ ^/(landing|index)\.html$ {
+    location ~ ^/(console|index)\.html$ {
         return 301 /$1;
     }
     
-    # Serve landing page without extension by proxying to landing.html
-    location = /landing {
-        proxy_pass http://127.0.0.1:3000/landing.html;
+    # Serve console page without extension by proxying to console.html
+    location = /console {
+        proxy_pass http://127.0.0.1:3000/console.html;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
