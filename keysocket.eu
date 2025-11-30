@@ -119,6 +119,7 @@ server {
         proxy_set_header Host $host;
         add_header Content-Type application/xml;
         add_header Cache-Control "public, max-age=3600, s-maxage=86400";
+        access_log off;
     }
 
     # SEO: Serve robots.txt with proper headers and caching
@@ -127,6 +128,7 @@ server {
         proxy_set_header Host $host;
         add_header Content-Type text/plain;
         add_header Cache-Control "public, max-age=3600, s-maxage=86400";
+        access_log off;
     }
 
     # SEO: Optional OG image placeholder (create this file if you want custom social images)
