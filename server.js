@@ -88,24 +88,24 @@ app.get('/auth/google',
   // If already authenticated, do not start a new OAuth flow
   (req, res, next) => {
     if (req.isAuthenticated && req.isAuthenticated()) {
-      return res.redirect('/?auth=already');
+      return res.redirect('/console?auth=already');
     }
     return next();
   },
   passport.authenticate('google', { scope: ['profile', 'email'] }));
 
 app.get('/auth/google/callback',
-  passport.authenticate('google', { failureRedirect: '/?auth=failure' }),
+  passport.authenticate('google', { failureRedirect: '/console?auth=failure' }),
   (req, res) => {
-    // Successful authentication, redirect to main page with success indicator
-    res.redirect('/?auth=success');
+    // Successful authentication, redirect to console page with success indicator
+    res.redirect('/console?auth=success');
   });
 
 // Logout route
 app.get('/logout', (req, res, next) => {
   req.logout((err) => {
     if (err) { return next(err); }
-    res.redirect('/');
+    res.redirect('/console');
   });
 });
 
@@ -158,6 +158,18 @@ const ASSET_VERSION = process.env.ASSET_VERSION || (() => {
   try { return require(path.join(__dirname, 'package.json')).version || String(Date.now()); } catch (e) { return String(Date.now()); }
 })();
 
+function serveConsole(req, res) {
+  try {
+    const consolePath = path.join(__dirname, 'console.html');
+    let html = fs.readFileSync(consolePath, 'utf8');
+    html = html.replace(/__ASSET_VERSION__/g, ASSET_VERSION);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.send(html);
+  } catch (e) {
+    return res.status(500).send('Server error');
+  }
+}
+
 function serveIndex(req, res) {
   try {
     // Always serve the same HTML - let frontend handle authentication logic
@@ -173,6 +185,8 @@ function serveIndex(req, res) {
 
 app.get('/', serveIndex);
 app.get('/index.html', serveIndex);
+app.get('/console', serveConsole);
+app.get('/console.html', serveConsole);
 
 app.get('/health', (req, res) => res.json({ ok: true, env: process.env.NODE_ENV || 'development' }));
 

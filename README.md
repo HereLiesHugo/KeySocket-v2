@@ -1,11 +1,17 @@
 # KeySocket: A Secure Web SSH Gateway
 
 ## Website:
-### https://keysocket.eu
-### https://keysocket.eu/landing
+### https://keysocket.eu - Landing Page
+### https://keysocket.eu/console - Console
 
 I thought there weren't enough free web ssh clients.
 So here, a free web ssh client with modern styling.
+
+## Support
+
+If you find this project useful, please consider supporting its development:
+- **Website:** [maturqu.com](https://maturqu.com)
+- **Ko-fi:** [Support on Ko-fi](https://ko-fi.com/maturqu)
 
 Here's the boring version:
 
@@ -106,20 +112,36 @@ KeySocket provides a modern, intuitive interface designed for both technical and
       ```
     - Open the `.env` file and fill in the required values:
       ```
+      # Server Configuration
+      HOST=0.0.0.0
+      PORT=3000
+      NODE_ENV=production
+      
+      # TLS Configuration (optional, if Node handles TLS)
+      USE_TLS=false
+      TLS_KEY=/etc/letsencrypt/live/keysocket.eu/privkey.pem
+      TLS_CERT=/etc/letsencrypt/live/keysocket.eu/fullchain.pem
+      
+      # Cloudflare Turnstile (bot protection)
+      TURNSTILE_SECRET="your_cloudflare_secret_key"
+      TURNSTILE_SITEKEY="your_cloudflare_site_key"
+      TURNSTILE_TOKEN_TTL_MS=30000
+      
       # Google OAuth Credentials
-      GOOGLE_CLIENT_ID="YOUR_CLIENT_ID_HERE"
-      GOOGLE_CLIENT_SECRET="YOUR_CLIENT_SECRET_HERE"
-
+      GOOGLE_CLIENT_ID="your_client_id.apps.googleusercontent.com"
+      GOOGLE_CLIENT_SECRET="your_client_secret"
+      
       # Session Security
-      SESSION_SECRET="a_long_random_string_for_securing_sessions"
-
+      SESSION_SECRET="set-this-to-a-random-uuid"
+      
       # Application URL (important for OAuth redirects)
-      APP_BASE_URL="http://localhost:3000"
-
-      # Security & Performance (optional)
+      APP_BASE_URL="https://your-domain.com" // or http://localhost:3000 for development
+      
+      # Security & Performance Limits
       RATE_LIMIT=120                    # Requests per minute per IP
       CONCURRENT_PER_IP=5              # Maximum concurrent connections per IP
       MAX_PRIVATEKEY_SIZE=65536        # Maximum private key file size in bytes
+      ALLOWED_HOSTS=                   # Optional: comma-separated allowed hosts
       ```
 
 ### Running the Application
@@ -169,30 +191,86 @@ KeySocket provides a modern, intuitive interface designed for both technical and
 For production use, it is highly recommended to deploy KeySocket behind a reverse proxy with proper TLS termination.
 
 ### Nginx Configuration Example
+A complete nginx configuration with security headers, SSL, and extensionless URL support is included in the repository as `keysocket.eu`. Key features include:
+
 ```nginx
+# Redirect HTTP to HTTPS
+server {
+    listen 80;
+    server_name your-domain.com;
+    return 301 https://$host$request_uri;
+}
+
+# Main HTTPS server block
 server {
     listen 443 ssl http2;
     server_name your-domain.com;
     
-    # SSL configuration
-    ssl_certificate /path/to/cert.pem;
-    ssl_certificate_key /path/to/key.pem;
+    # SSL configuration (Certbot managed)
+    ssl_certificate /etc/letsencrypt/live/your-domain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/your-domain.com/privkey.pem;
     
     # Security headers
-    add_header X-Frame-Options DENY;
-    add_header X-Content-Type-Options nosniff;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
     
-    # Proxy to Node.js application
-    location / {
-        proxy_pass http://localhost:3000;
+    # Content Security Policy for Cloudflare Turnstile compatibility
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' ws: wss: https://cloudflareinsights.com https://challenges.cloudflare.com; frame-src 'self' https://challenges.cloudflare.com;" always;
+    
+    # Extensionless URL support
+    location ~ ^/(console|index)\.html$ {
+        return 301 /$1;
+    }
+    
+    # Console page proxy
+    location = /console {
+        proxy_pass http://127.0.0.1:3000/console.html;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
+        proxy_hide_header Content-Security-Policy;
+    }
+    
+    # Index page proxy  
+    location = /index {
+        proxy_pass http://127.0.0.1:3000/index.html;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_hide_header Content-Security-Policy;
+    }
+    
+    # WebSocket endpoint for SSH connections
+    location /ssh {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_hide_header Content-Security-Policy;
+        proxy_buffering off;
+        proxy_read_timeout 86400;
+        proxy_send_timeout 86400;
+    }
+    
+    # All other requests to Node.js
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_hide_header Content-Security-Policy;
     }
 }
 ```
@@ -213,9 +291,3 @@ server {
 ## Contributions
 
 This is a community-driven project. Contributions, bug reports, and feature requests are welcome. Please feel free to open an issue or submit a pull request on the [GitHub repository](https://github.com/HereLiesHugo/KeySocket-v2).
-
-## Support
-
-If you find this project useful, please consider supporting its development:
-- **Website:** [maturqu.com](https://maturqu.com)
-- **Ko-fi:** [Support on Ko-fi](https://ko-fi.com/maturqu)

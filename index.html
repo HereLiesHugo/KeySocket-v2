@@ -1,125 +1,205 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>KeySocket — Secure Web SSH Client | Terminal in Browser</title>
-    <meta name="description" content="KeySocket is a secure web-based SSH client with Google OAuth authentication. Access your servers from any browser with xterm.js terminal, private key support, and real-time connection feedback." />
-    <meta name="keywords" content="web ssh, ssh client, terminal, browser, secure, google oauth, xterm.js, remote access, keysocket" />
-    <meta name="author" content="KeySocket" />
-    <meta property="og:title" content="KeySocket — Secure Web SSH Client" />
-    <meta property="og:description" content="Access your servers securely from any browser with KeySocket's web-based SSH client featuring Google OAuth authentication and private key support." />
-    <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://keysocket.eu/" />
-    <meta property="og:image" content="https://keysocket.eu/og-image.png" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="KeySocket — Secure Web SSH Client" />
-    <meta name="twitter:description" content="Secure web-based SSH client with Google OAuth. Access servers from any browser." />
-    <meta name="twitter:image" content="https://keysocket.eu/og-image.png" />
-    <link rel="canonical" href="https://keysocket.eu/" />
-    <link rel="stylesheet" href="/lib/xterm.css" />
-    <link rel="stylesheet" href="css/style.css?v=7.1" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KeySocket - Web SSH Gateway</title>
+    <link rel="stylesheet" href="css/landing_style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
-    <div class="app">
-        <header class="topbar">
-            <h1>KeySocket</h1>
-            <div class="topbar-right">
-                <div class="domain">
-                    <a href="https://maturqu.com" target="_blank" rel="noopener noreferrer">Who am I? - maturqu.com</a> | <br>
-                    <a href="https://ko-fi.com/maturqu" target="_blank" rel="noopener noreferrer">Support Me on Ko-fi and help me keep this project free</a> | <br>
-                    <a href="https://github.com/HereLiesHugo/KeySocket-v2/tree/dev">Github (Dev Branch) - This is the experimental development branch and may contain bugs</a> | <br>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <i class="fas fa-key"></i>
+                <span>KeySocket</span>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="#features">Features</a></li>
+                <li><a href="#how-it-works">How It Works</a></li>
+                <li><a href="#security">Security</a></li>
+            </ul>
+            <div class="nav-right">
+                <div class="dark-mode-toggle" id="dark-mode-toggle">
+                    <i class="fas fa-moon"></i>
+                    <i class="fas fa-sun"></i>
+                </div>
+                <div class="nav-toggle" id="mobile-menu">
+                    <span class="bar"></span>
+                    <span class="bar"></span>
+                    <span class="bar"></span>
                 </div>
             </div>
-        </header>
-
-        <div id="auth-banner" class="auth-banner" aria-live="polite" aria-atomic="true" hidden></div>
-
-        <main>
-            <section class="connect">
-                <form id="connect-form">
-                    <label>Host <input name="host" placeholder="example.com or 192.0.2.1" required></label>
-                    <label>Port <input name="port" type="number" value="22"></label>
-                    <label>Username <input name="username" required></label>
-                    <label>Auth
-                        <select id="auth-select" name="auth">
-                            <option value="password">Password</option>
-                            <option value="key">Private key</option>
-                        </select>
-                    </label>
-                    <label id="password-label">Password <input name="password" type="password"></label>
-                    <label id="key-label" style="display:none">Private key <input id="keyfile" type="file" accept="*/*"></label>
-                    <label id="passphrase-label" style="display:none">Key passphrase (optional) <input name="passphrase" type="password" autocomplete="off"></label>
-                    <div class="actions">
-                        <button id="connect-btn" type="submit">Connect</button>
-                        <button id="disconnect-btn" type="button" disabled>Disconnect</button>
-                        <button id="save-conn" type="button">Save</button>
-                        <select id="saved-list"><option value="">Saved connections</option></select>
-                    </div>
-                </form>
-            </section>
-
-            <section class="terminal-area">
-                <div class="terminal-controls">
-                    <span style="font-size:11px;color:var(--muted);flex:1">Drag corner to resize, or use fullscreen</span>
-                    <button id="app-management-toggle" type="button" class="app-management-btn">Settings</button>
-                    <button id="fullscreen-btn" type="button" title="Toggle fullscreen">⛶ Fullscreen</button>
-                </div>
-                <div id="terminal" class="terminal"></div>
-                <div class="resize-handle" id="resize-handle"></div>
-            </section>
-            <div class="keyboard-container" aria-label="Virtual keyboard"></div>
-
-            <div id="app-management-overlay" class="app-management-overlay" hidden>
-                <section id="app-management" class="app-management">
-                    <div class="app-management-header">
-                        <h2>App Management</h2>
-                        <button id="app-management-close" type="button" class="app-management-close">Close</button>
-                    </div>
-                    <div class="app-management-grid">
-                        <div class="app-management-section">
-                            <h3>Saved Connections</h3>
-                            <p class="app-management-help">Edit or remove saved SSH connections. These are stored in your browser only.</p>
-                            <div id="app-management-connections-list" class="connections-list"></div>
-                        </div>
-                        <div class="app-management-section">
-                            <h3>Theme</h3>
-                            <p class="app-management-help">Choose how the interface and terminal look. This is saved per browser.</p>
-                            <label>
-                                Theme
-                                <select id="app-theme-select">
-                                    <option value="dark">Dark (Default)</option>
-                                    <option value="darker">Darker</option>
-                                    <option value="light">Light</option>
-                                    <option value="monokai">Monokai</option>
-                                    <option value="dracula">Dracula</option>
-                                    <option value="solarized-dark">Solarized Dark</option>
-                                    <option value="solarized-light">Solarized Light</option>
-                                </select>
-                            </label>
-                        </div>
-                    </div>
-                </section>
-            </div>
-        </main>
-
-        <footer class="footer">Secure web SSH gateway — run behind TLS and reverse proxy on <strong>keysocket.eu</strong></footer>
-    </div>
-
-    <!-- Turnstile overlay shown on initial site enter until verified -->
-    <div id="turnstile-overlay" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);z-index:9999;">
-        <div style="background:#fff;padding:24px;border-radius:8px;max-width:420px;width:90%;text-align:center;">
-            <h3>Verify you're human</h3>
-            <p>Please complete the verification to continue using KeySocket.</p>
-            <div id="turnstile-widget"></div>
         </div>
-    </div>
+    </nav>
 
-    <script src="/lib/xterm.js"></script>
-    <script src="/lib/xterm-addon-fit.js"></script>
-    <script src="/lib/xterm-addon-webgl.js"></script>
-    <!-- Load Turnstile and call window.ksInitTurnstile when ready -->
-    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=ksInitTurnstile&render=explicit" async defer></script>
-    <script src="js/app.js?v=7.4"></script>
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-container">
+            <div class="hero-content">
+                <h1 class="hero-title">Secure Web SSH Gateway</h1>
+                <p class="hero-subtitle">Access your servers from anywhere with KeySocket - the modern, secure web-based SSH terminal</p>
+                <div class="hero-buttons">
+                    <a href="/console" class="btn btn-primary">Access Now</a>
+                    <a href="#features" class="btn btn-secondary">Learn More</a>
+                </div>
+            </div>
+            <div class="hero-image">
+                <div class="terminal-preview">
+                    <div class="terminal-header">
+                        <div class="terminal-buttons">
+                            <span class="btn-red"></span>
+                            <span class="btn-yellow"></span>
+                            <span class="btn-green"></span>
+                        </div>
+                        <div class="terminal-title">ssh@keysocket</div>
+                    </div>
+                    <div class="terminal-body">
+                        <div class="terminal-line">
+                            <span class="prompt">$</span>
+                            <span class="command typing">ssh user@server.com</span>
+                        </div>
+                        <div class="terminal-line">
+                            <span class="prompt">></span>
+                            <span class="output">Connected successfully</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="features">
+        <div class="container">
+            <h2 class="section-title">Powerful Features</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-shield-alt"></i>
+                    </div>
+                    <h3>Secure Authentication</h3>
+                    <p>OAuth2 integration with Google and other providers for secure, passwordless access</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-terminal"></i>
+                    </div>
+                    <h3>Full Terminal Experience</h3>
+                    <p>Powered by xterm.js for a complete terminal experience with support for colors, fonts, and more</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-lock"></i>
+                    </div>
+                    <h3>End-to-End Encryption</h3>
+                    <p>Your SSH connections are encrypted from browser to server with industry-standard security</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-mobile-alt"></i>
+                    </div>
+                    <h3>Mobile Friendly</h3>
+                    <p>Access your servers from any device with our responsive web interface</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <h3>Multi-User Support</h3>
+                    <p>Manage multiple users with session management and access controls</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <h3>Rate Limiting</h3>
+                    <p>Built-in rate limiting and security headers to protect against abuse</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works -->
+    <section id="how-it-works" class="how-it-works">
+        <div class="container">
+            <h2 class="section-title">How It Works</h2>
+            <div class="steps">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h3>Authenticate</h3>
+                        <p>Sign in with your OAuth provider (Google, etc.) to access the gateway</p>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h3>Connect</h3>
+                        <p>Enter your SSH credentials and server details in the web interface</p>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h3>Terminal</h3>
+                        <p>Get a full-featured terminal experience directly in your browser</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Security Section -->
+    <section id="security" class="security">
+        <div class="container">
+            <h2 class="section-title">Security First</h2>
+            <div class="security-grid">
+                <div class="security-item">
+                    <i class="fas fa-certificate"></i>
+                    <h3>SSL/TLS Encryption</h3>
+                    <p>All communications are encrypted with SSL/TLS certificates</p>
+                </div>
+                <div class="security-item">
+                    <i class="fas fa-user-shield"></i>
+                    <h3>OAuth2 Authentication</h3>
+                    <p>Secure authentication through trusted identity providers</p>
+                </div>
+                <div class="security-item">
+                    <i class="fas fa-gavel"></i>
+                    <h3>Session Management</h3>
+                    <p>Secure session handling with automatic timeout and cleanup</p>
+                </div>
+                <div class="security-item">
+                    <i class="fas fa-helmet-safety"></i>
+                    <h3>Security Headers</h3>
+                    <p>Helmet.js provides comprehensive security header protection</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-logo">
+                    <i class="fas fa-key"></i>
+                    <span>KeySocket</span>
+                </div>
+                <div class="footer-text">
+                    <p>&copy; <span id="current-year"></span></span> KeySocket. Secure web-based SSH gateway.</p>
+                </div>
+                <div class="footer-links">
+                    <a href="/LICENSE">License</a>
+                    <a href="https://github.com/HereLiesHugo/KeySocket-v2/tree/dev">Documentation</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="js/landing.js"></script>
 </body>
 </html>
