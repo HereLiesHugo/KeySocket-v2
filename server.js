@@ -1,4 +1,5 @@
 require('dotenv').config();
+const net = require('net');
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
@@ -14,7 +15,6 @@ const http = require('http');
 const { Client } = require('ssh2');
 const { URL } = require('url');
 const cookie = require('cookie');
-const net = require('net');
 
 // Enhanced logging system
 const logFile = path.join(__dirname, 'server.log');
@@ -106,20 +106,10 @@ const TLS_CERT = process.env.TLS_CERT || '/etc/letsencrypt/live/keysocket.eu/ful
 
 // Basic security
 app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      // allow Cloudflare Turnstile, jsDelivr CDN, and Google Fonts
-      scriptSrc: ["'self'", "https://challenges.cloudflare.com", "https://cdn.jsdelivr.net"],
-      frameSrc: ["https://challenges.cloudflare.com"],
-      connectSrc: ["'self'", "https://challenges.cloudflare.com", "https://accounts.google.com", "https://oauth2.googleapis.com"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://fonts.googleapis.com"],
-      fontSrc: ["'self'", "https://cdn.jsdelivr.net", "https://fonts.gstatic.com"],
-      imgSrc: ["'self'", "data:"],
-    }
-  },
-  crossOriginResourcePolicy: false  // allow CORS requests to CDN resources
+  contentSecurityPolicy: false, // Disabled: We handle CSP in Nginx
+  crossOriginResourcePolicy: false
 }));
+
 app.use(express.json({ limit: '200kb' }));
 app.use(express.urlencoded({ extended: false }));
 
