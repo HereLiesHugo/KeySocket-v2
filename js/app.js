@@ -11,6 +11,7 @@
     const authSelect = document.getElementById('auth-select');
     const passwordLabel = document.getElementById('password-label');
     const keyLabel = document.getElementById('key-label');
+    const passphraseLabel = document.getElementById('passphrase-label');
     const keyfileInput = document.getElementById('keyfile');
     const connectBtn = document.getElementById('connect-btn');
     const disconnectBtn = document.getElementById('disconnect-btn');
@@ -267,9 +268,11 @@
         if (authSelect.value === 'password') {
             if (passwordLabel) passwordLabel.style.display = '';
             if (keyLabel) keyLabel.style.display = 'none';
+            if (passphraseLabel) passphraseLabel.style.display = 'none';
         } else {
             if (passwordLabel) passwordLabel.style.display = 'none';
             if (keyLabel) keyLabel.style.display = '';
+            if (passphraseLabel) passphraseLabel.style.display = '';
         }
     }
 
@@ -697,8 +700,15 @@
                 username: form.username.value,
                 auth: authSelect ? authSelect.value : 'password'
             };
-            if (authSelect && authSelect.value === 'password') payload.password = form.password.value;
-            else payload.privateKey = privateKeyText || null;
+            if (authSelect && authSelect.value === 'password') {
+                payload.password = form.password.value;
+            } else {
+                payload.privateKey = privateKeyText || null;
+                // Optional passphrase for encrypted private keys (not stored anywhere)
+                if (form.passphrase && form.passphrase.value) {
+                    payload.passphrase = form.passphrase.value;
+                }
+            }
 
             socket.send(JSON.stringify(payload));
             if (connectBtn) connectBtn.disabled = true;

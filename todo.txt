@@ -1,7 +1,4 @@
 UX:
-    - App Management Page
-        - Add, Delete or edit saved connections
-        - Change Site theme (Different kinds of Dark Theme, Light Theme Monokai etc..)
     - Session Reconnect
         - 30s Grace Period (keeps ssh connection alive for 30s)
     - Logs
