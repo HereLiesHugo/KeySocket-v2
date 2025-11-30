@@ -8,29 +8,64 @@ So here, a free web ssh client with modern styling.
 
 Here's the boring version:
 
-KeySocket is a self-hosted, web-based SSH client designed for secure and convenient access to remote terminals from any modern browser. It provides a clean, responsive interface powered by xterm.js and a robust Node.js backend.
+KeySocket is a web-based SSH client designed for secure and convenient access to remote terminals from any modern browser. It provides a clean, responsive interface powered by xterm.js and a robust Node.js backend.
 
 The primary goal of this project is to offer a secure alternative to traditional desktop SSH clients, with a focus on usability for both desktop and mobile devices.
 
 ## Core Features
 
 - **Web-Based Terminal:** A full-featured terminal emulator in the browser, powered by xterm.js with WebGL rendering for high performance.
-- **Secure Authentication:** All sessions are protected by mandatory Google OAuth 2.0, ensuring that only authenticated users can access the gateway.
+- **Secure Authentication:** All sessions are protected by mandatory Google OAuth 2.0 with Cloudflare Turnstile verification, ensuring that only authenticated users can access the gateway.
 - **Flexible SSH Authentication:** Supports both password and private key-based authentication for connecting to remote hosts.
 - **Client-Side Key Handling:** Private keys are handled exclusively in the browser's memory and are never stored on the server, providing a clear security boundary.
 - **Mobile-First Design:** Includes a responsive on-screen keyboard with QWERTY, AZERTY, and symbol layouts, making it fully usable on tablets and phones.
-- **Customizable Terminal:** The terminal window is fully resizable and includes a fullscreen mode for an immersive experience.
+- **Customizable Terminal:** The terminal window is fully resizable with drag handles and includes a fullscreen mode for an immersive experience.
 - **Connection Management:** Users can save frequently used connection details (host, port, user) to their browser's local storage for quick access.
 - **Built-in Security:** The application is hardened with rate-limiting, a strict Content Security Policy (CSP), and secure WebSocket session handling.
+- **Theme System:** Multiple built-in themes including Dark, Darker, Light, Monokai, Dracula, and Solarized (both light and dark variants).
+- **App Management Interface:** Comprehensive settings panel for managing saved connections and customizing the interface appearance.
+- **Responsive Design:** Fully responsive layout that adapts seamlessly to desktop, tablet, and mobile devices.
+- **Terminal Resizing:** Dynamic terminal resizing with proper SSH terminal size synchronization.
+- **Session Persistence:** Maintains user preferences and saved connections in browser local storage.
+- **Real-time Feedback:** Visual feedback for authentication status, connection states, and error messages.
 
 ## Security Model
 
 Security is a primary consideration in KeySocket's design.
 
-- **User Authentication:** Access to the gateway is restricted to users who have authenticated via Google OAuth. Anonymous connection attempts are not possible.
+- **User Authentication:** Access to the gateway is restricted to users who have authenticated via Google OAuth with Cloudflare Turnstile verification for bot protection. Anonymous connection attempts are not possible.
 - **WebSocket Security:** WebSocket connections are tightly integrated with the Express.js session middleware. Only authenticated users with a valid session can establish a WebSocket connection.
 - **Rate Limiting:** The server implements strict rate-limiting on all HTTP requests to prevent brute-force attacks and other abuse.
+- **Content Security Policy:** A strict CSP is enforced to prevent XSS attacks and ensure secure resource loading.
 - **Client-Side Private Keys:** To prevent the server from becoming a high-value target for key theft, private keys are never sent to or stored on the server. They are loaded into the browser's memory for the duration of the connection attempt only. Users are strongly encouraged to use passphrase-encrypted keys as a best practice.
+- **Request Size Limits:** Configurable limits for request payloads and private key sizes to prevent resource exhaustion attacks.
+
+## User Interface & Experience
+
+KeySocket provides a modern, intuitive interface designed for both technical and non-technical users.
+
+### Interface Features
+- **Responsive Design:** Seamlessly adapts to desktop, tablet, and mobile screen sizes
+- **Drag-to-Resize Terminal:** Resize the terminal window by dragging the corner handle
+- **Fullscreen Mode:** Immersive terminal experience with fullscreen toggle
+- **Virtual Keyboard:** On-screen keyboard with multiple layouts (QWERTY, AZERTY, symbols) for mobile devices
+- **Theme Customization:** Choose from 7 pre-built themes or use the system default
+- **Settings Panel:** Centralized app management interface for connections and preferences
+
+### Available Themes
+- **Dark:** Default dark theme with blue accents
+- **Darker:** High-contrast dark theme for low-light environments
+- **Light:** Clean light theme for daytime use
+- **Monokai:** Popular dark theme inspired by the Monokai color scheme
+- **Dracula:** Dark theme based on the Dracula color palette
+- **Solarized Dark:** Eye-friendly dark theme with reduced blue light
+- **Solarized Light:** Light variant of the Solarized theme
+
+### Connection Management
+- **Save Connections:** Store frequently used SSH connections in browser local storage
+- **Quick Access:** Dropdown menu for instant connection to saved hosts
+- **Edit & Delete:** Manage saved connections through the settings panel
+- **Auto-complete:** Host and username suggestions from saved connections
 
 ## Getting Started
 
@@ -77,6 +112,11 @@ Security is a primary consideration in KeySocket's design.
 
       # Application URL (important for OAuth redirects)
       APP_BASE_URL="http://localhost:3000"
+
+      # Security & Performance (optional)
+      RATE_LIMIT=120                    # Requests per minute per IP
+      CONCURRENT_PER_IP=5              # Maximum concurrent connections per IP
+      MAX_PRIVATEKEY_SIZE=65536        # Maximum private key file size in bytes
       ```
 
 ### Running the Application
@@ -92,6 +132,80 @@ Security is a primary consideration in KeySocket's design.
     ```bash
     npm start
     ```
+
+## Technical Architecture
+
+### Backend Stack
+- **Node.js:** JavaScript runtime for the server
+- **Express.js:** Web framework for HTTP routing and middleware
+- **Socket.IO (WebSocket):** Real-time bidirectional communication for terminal I/O
+- **SSH2:** Pure JavaScript SSH2 client library
+- **Passport.js:** Authentication middleware for Google OAuth 2.0
+- **Express Session:** Session management with secure cookies
+- **Helmet:** Security middleware for setting HTTP headers
+- **Express Rate Limit:** Rate limiting middleware for DDoS protection
+- **Morgan:** HTTP request logger
+
+### Frontend Stack
+- **xterm.js:** Terminal emulator component with WebGL rendering
+- **xterm-addon-fit:** Terminal resize addon
+- **xterm-addon-webgl:** WebGL renderer for high-performance terminal
+- **Vanilla JavaScript:** No frontend framework dependencies
+- **CSS3:** Modern styling with CSS custom properties for theming
+
+### Security Features
+- **Content Security Policy:** Prevents XSS and code injection attacks
+- **Rate Limiting:** Configurable request limits per IP address
+- **Session Security:** Secure, HTTP-only cookies with proper expiration
+- **Request Validation:** Input validation and size limits
+- **WebSocket Authentication:** Only authenticated users can establish SSH connections
+
+## Production Deployment
+
+### Recommended Setup
+For production use, it is highly recommended to deploy KeySocket behind a reverse proxy with proper TLS termination.
+
+### Nginx Configuration Example
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name your-domain.com;
+    
+    # SSL configuration
+    ssl_certificate /path/to/cert.pem;
+    ssl_certificate_key /path/to/key.pem;
+    
+    # Security headers
+    add_header X-Frame-Options DENY;
+    add_header X-Content-Type-Options nosniff;
+    
+    # Proxy to Node.js application
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
+### Environment Considerations
+- **Node.js Version:** Use Node.js v16 or newer for optimal performance and security
+- **Process Manager:** Use PM2 or similar process manager for production deployments
+- **Logging:** Configure proper logging and monitoring for production environments
+- **Backup:** Regular backups of configuration and any persistent data
+- **Updates:** Keep dependencies updated for security patches
+
+### Performance Optimization
+- **WebSocket Compression:** Enable compression for better performance on slower connections
+- **Static Asset Caching:** Configure proper caching headers for static assets
+- **Connection Limits:** Adjust concurrent connection limits based on server capacity
+- **Memory Usage:** Monitor memory usage, especially with multiple concurrent SSH sessions
 
 ## Contributions
 
