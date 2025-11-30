@@ -146,7 +146,23 @@ function parseWebSocketSession(cookieHeader, callback) {
 }
 
 // Session configuration (reusable for Express and WebSocket)
+const FileStore = require('session-file-store')(session);
+
+// Ensure sessions directory exists
+const sessionsDir = path.join(__dirname, 'sessions');
+if (!fs.existsSync(sessionsDir)) {
+  fs.mkdirSync(sessionsDir, { recursive: true });
+}
+
+// Create session store explicitly
+const sessionStore = new FileStore({ 
+  path: sessionsDir, 
+  ttl: 86400, // 24 hours
+  retries: 0
+});
+
 const sessionConfig = {
+  store: sessionStore,
   secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
@@ -158,15 +174,8 @@ const sessionConfig = {
   }
 };
 
-// Create session store explicitly
-const MemoryStore = require('express-session').MemoryStore;
-const sessionStore = new MemoryStore();
-
 // Initialize session middleware first
-const sessionMiddleware = session({
-  ...sessionConfig,
-  store: sessionStore
-});
+const sessionMiddleware = session(sessionConfig);
 app.use(sessionMiddleware);
 
 console.log(`[Server] Session store type: ${typeof sessionStore}`);
