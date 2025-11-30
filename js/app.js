@@ -772,7 +772,17 @@
         socket.addEventListener('error', (err) => {
             try { term.writeln('\r\n[Socket error]'); } catch (e) {}
             console.error('ws error', err);
-            showConnectionBanner('WebSocket connection error.', 'error');
+            
+            // Check if this is an authentication error
+            const errorMessage = err.message || '';
+            if (err.code === 1008 || errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
+                showConnectionBanner('Authentication required. Please complete Google OAuth login.', 'error');
+                try { term.writeln('\r\n[ERROR] Authentication required - please complete login first'); } catch (e) {}
+                // Re-run authentication check
+                checkAuthStatus();
+            } else {
+                showConnectionBanner('WebSocket connection error.', 'error');
+            }
         });
 
         if (typeof term.onData === 'function') {

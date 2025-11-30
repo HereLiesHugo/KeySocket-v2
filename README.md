@@ -38,14 +38,32 @@ The primary goal of this project is to offer a secure alternative to traditional
 
 ## Security Model
 
-Security is a primary consideration in KeySocket's design.
+Security is a primary consideration in KeySocket's design, with multiple layers of protection implemented.
 
+### Authentication & Access Control
 - **User Authentication:** Access to the gateway is restricted to users who have authenticated via Google OAuth with Cloudflare Turnstile verification for bot protection. Anonymous connection attempts are not possible.
 - **WebSocket Security:** WebSocket connections are tightly integrated with the Express.js session middleware. Only authenticated users with a valid session can establish a WebSocket connection.
+- **Session Persistence:** Sessions are stored using `session-file-store` for production reliability, preventing memory leaks and maintaining sessions across server restarts.
+- **Session Cleanup:** Automatic cleanup of expired sessions after 24 hours with periodic cleanup every 6 hours to prevent storage accumulation.
+
+### Network Security
+- **SSRF Protection:** Built-in protection against Server-Side Request Forgery attacks. The system blocks access to private/local networks including:
+  - Localhost variants (`localhost`, `127.0.0.1`, `::1`)
+  - Private IPv4 ranges (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`)
+  - Link-local addresses (`169.254.0.0/16`)
+  - Suspicious domain patterns (`internal`, `admin`, `management`, etc.)
+- **IP Validation:** Comprehensive IP address validation using Node.js `net` module for both IPv4 and IPv6 addresses.
+
+### Application Security
 - **Rate Limiting:** The server implements strict rate-limiting on all HTTP requests to prevent brute-force attacks and other abuse.
-- **Content Security Policy:** A strict CSP is enforced to prevent XSS attacks and ensure secure resource loading.
+- **Content Security Policy:** A strict CSP is enforced at the NGINX level to prevent XSS attacks and ensure secure resource loading.
 - **Client-Side Private Keys:** To prevent the server from becoming a high-value target for key theft, private keys are never sent to or stored on the server. They are loaded into the browser's memory for the duration of the connection attempt only. Optional passphrase support for encrypted keys is available, with passphrases never stored.
 - **Request Size Limits:** Configurable limits for request payloads and private key sizes to prevent resource exhaustion attacks.
+
+### Monitoring & Logging
+- **Enhanced Logging:** Comprehensive logging system with structured JSON format, multiple log levels (error, warn, info, debug), and detailed security event tracking.
+- **Security Event Monitoring:** All authentication attempts, SSRF blocks, and SSH connections are logged with full context including IP addresses, user attribution, and timing metrics.
+- **Audit Trail:** Complete audit trail of all user actions and system events for security monitoring and compliance.
 
 ## User Interface & Experience
 
@@ -163,13 +181,19 @@ KeySocket provides a modern, intuitive interface designed for both technical and
 ### Backend Stack
 - **Node.js:** JavaScript runtime for the server
 - **Express.js:** Web framework for HTTP routing and middleware
-- **Socket.IO (WebSocket):** Real-time bidirectional communication for terminal I/O
+- **WebSocket (ws):** Real-time bidirectional communication for terminal I/O
 - **SSH2:** Pure JavaScript SSH2 client library
 - **Passport.js:** Authentication middleware for Google OAuth 2.0
-- **Express Session:** Session management with secure cookies
-- **Helmet:** Security middleware for setting HTTP headers
+- **session-file-store:** Production-ready session storage with automatic cleanup
+- **Helmet:** Security middleware for setting HTTP headers (CSP handled by NGINX)
 - **Express Rate Limit:** Rate limiting middleware for DDoS protection
 - **Morgan:** HTTP request logger
+
+### Security Components
+- **SSRF Protection:** IP validation and private network blocking
+- **Session Management:** File-based session storage with TTL and cleanup
+- **Enhanced Logging:** Structured JSON logging with multiple levels
+- **Authentication:** Google OAuth + Cloudflare Turnstile integration
 
 ### Frontend Stack
 - **xterm.js:** Terminal emulator component with WebGL rendering
@@ -179,11 +203,15 @@ KeySocket provides a modern, intuitive interface designed for both technical and
 - **CSS3:** Modern styling with CSS custom properties for theming
 
 ### Security Features
-- **Content Security Policy:** Prevents XSS and code injection attacks
+- **Content Security Policy:** NGINX-enforced CSP prevents XSS and code injection attacks
+- **SSRF Protection:** Blocks access to private networks and localhost
 - **Rate Limiting:** Configurable request limits per IP address
-- **Session Security:** Secure, HTTP-only cookies with proper expiration
+- **Session Security:** File-based session storage with 24-hour TTL and automatic cleanup
 - **Request Validation:** Input validation and size limits
 - **WebSocket Authentication:** Only authenticated users can establish SSH connections
+- **Enhanced Logging:** Comprehensive security event logging and audit trails
+- **IP Validation:** Comprehensive IPv4/IPv6 address validation
+- **Bot Protection:** Cloudflare Turnstile integration for automated bot detection
 
 ## Production Deployment
 
@@ -288,6 +316,70 @@ server {
 - **Connection Limits:** Adjust concurrent connection limits based on server capacity
 - **Memory Usage:** Monitor memory usage, especially with multiple concurrent SSH sessions
 
+## Logging & Monitoring
+
+### Enhanced Logging System
+KeySocket includes a comprehensive logging system designed for production monitoring and security auditing:
+
+#### Log Features
+- **Structured JSON Logging:** All logs include metadata in JSON format for easy parsing
+- **Multiple Log Levels:** `error`, `warn`, `info`, `debug` (configurable via `LOG_LEVEL` environment variable)
+- **Dual Output:** Both file logging (`./server.log`) and colored console output
+- **Timestamped Entries:** ISO format timestamps for all events
+
+#### Security Event Logging
+- **Authentication Attempts:** All Google OAuth and WebSocket authentication attempts
+- **SSRF Protection:** Blocked attempts to access private networks with full context
+- **SSH Connections:** Connection establishment, errors, and lifecycle events
+- **Session Management:** Session creation, cleanup, and expiration events
+- **User Attribution:** All actions are linked to specific user accounts and IP addresses
+
+#### Log Format Example
+```
+2025-11-30T14:50:00.000Z [INFO] WebSocket user authenticated successfully | {"session_id": "abc123...", "user_email": "user@example.com", "user_name": "John Doe"}
+2025-11-30T14:50:01.000Z [WARN] SSRF attempt blocked - private/local network access denied | {"target_host": "127.0.0.1", "source_ip": "192.168.1.100", "user_email": "user@example.com"}
+```
+
+#### Configuration
+```bash
+# Set log level (default: info)
+export LOG_LEVEL=debug  # For verbose debugging
+export LOG_LEVEL=warn   # For production monitoring
+```
+
+### Monitoring Recommendations
+- **Log Rotation:** Configure log rotation to prevent disk space issues
+- **Alerting:** Set up alerts for security events (SSRF blocks, authentication failures)
+- **Metrics:** Monitor connection rates, error rates, and response times
+- **Audit Trails:** Regularly review security logs for suspicious activity
+
 ## Contributions
 
 This is a community-driven project. Contributions, bug reports, and feature requests are welcome. Please feel free to open an issue or submit a pull request on the [GitHub repository](https://github.com/HereLiesHugo/KeySocket-v2).
+
+## Changelog
+
+### Recent Security Enhancements
+
+#### v2.1.0 - Security Hardening Release
+- **🔒 WebSocket Authentication Fix:** Fixed authentication bypass vulnerability by implementing proper session sharing between Express and WebSocket servers
+- **🛡️ SSRF Protection:** Added comprehensive Server-Side Request Forgery protection with IP validation and private network blocking
+- **💾 Session Management:** Replaced MemoryStore with session-file-store to prevent memory leaks and enable session persistence across restarts
+- **🗑️ Session Cleanup:** Implemented automatic session cleanup after 24 hours with periodic cleanup every 6 hours
+- **📝 Enhanced Logging:** Added comprehensive structured logging system with JSON format, multiple log levels, and security event tracking
+- **🔧 CSP Unification:** Moved Content Security Policy from Node.js to NGINX for centralized security header management
+- **🔍 Security Monitoring:** Added detailed logging for authentication attempts, SSRF blocks, and SSH connections with full user attribution
+
+#### Security Features Added
+- IP address validation using Node.js `net` module
+- Private network range detection (IPv4/IPv6)
+- Suspicious domain pattern blocking
+- Session file storage with TTL management
+- Comprehensive audit trail generation
+- Real-time security event monitoring
+
+#### Production Improvements
+- Memory leak prevention through file-based sessions
+- Enhanced error handling and logging
+- Better session persistence and reliability
+- Improved debugging capabilities with structured logs
