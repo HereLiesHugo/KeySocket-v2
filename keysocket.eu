@@ -1,6 +1,5 @@
 # keysocket.eu - reverse proxy to Node on localhost:3000
-# Place this file at /etc/nginx/sites-available/keysocket.eu
-# Then enable with: sudo ln -s /etc/nginx/sites-available/keysocket.eu /etc/nginx/sites-enabled/
+# This is a complete nginx configuration example, it is also the one I use for my production server.
 
 # Map for websocket Connection header
 map $http_upgrade $connection_upgrade {
