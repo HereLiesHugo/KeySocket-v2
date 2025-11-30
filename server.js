@@ -88,24 +88,24 @@ app.get('/auth/google',
   // If already authenticated, do not start a new OAuth flow
   (req, res, next) => {
     if (req.isAuthenticated && req.isAuthenticated()) {
-      return res.redirect('/?auth=already');
+      return res.redirect('/console?auth=already');
     }
     return next();
   },
   passport.authenticate('google', { scope: ['profile', 'email'] }));
 
 app.get('/auth/google/callback',
-  passport.authenticate('google', { failureRedirect: '/?auth=failure' }),
+  passport.authenticate('google', { failureRedirect: '/console?auth=failure' }),
   (req, res) => {
-    // Successful authentication, redirect to main page with success indicator
-    res.redirect('/?auth=success');
+    // Successful authentication, redirect to console page with success indicator
+    res.redirect('/console?auth=success');
   });
 
 // Logout route
 app.get('/logout', (req, res, next) => {
   req.logout((err) => {
     if (err) { return next(err); }
-    res.redirect('/');
+    res.redirect('/console');
   });
 });
 
