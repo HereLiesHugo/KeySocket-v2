@@ -367,17 +367,6 @@ main {
   background-color: #164e63;
 }
 
-/* ============================================================================
-   RESPONSIVE DESIGN
-   ============================================================================ */
-@media (max-width: 1279px) {
-  main {
-    grid-template-columns: 1fr;
-  }
-  .keyboard-container {
-    display: block; /* Show keyboard on mobile */
-  }
-}
 
 /* ==========================================================================
    APP MANAGEMENT
@@ -545,7 +534,16 @@ main {
   color: var(--text-primary);
 }
 
+/* ============================================================================
+   RESPONSIVE DESIGN
+   - Stack layout and show virtual keyboard on smaller screens
+   - Simplify app management grid for mobile
+   ============================================================================ */
 @media (max-width: 1279px) {
+  main {
+    grid-template-columns: 1fr;
+  }
+
   .keyboard-container {
     display: block; /* Show keyboard on mobile */
   }
