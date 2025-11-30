@@ -6,9 +6,5 @@ Disallow: /socket.io/
 Disallow: /auth/
 Disallow: /turnstile-verify
 Disallow: /*.json$
-Disallow: /*?*$
-Crawl-delay: 1
-
-Allow: /
 
 Sitemap: https://keysocket.eu/sitemap.xml
