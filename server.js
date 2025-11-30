@@ -13,6 +13,7 @@ const https = require('https');
 const http = require('http');
 const { Client } = require('ssh2');
 const { URL } = require('url');
+const cookie = require('cookie');
 
 const app = express();
 
@@ -65,8 +66,49 @@ app.use(helmet({
 app.use(express.json({ limit: '200kb' }));
 app.use(express.urlencoded({ extended: false }));
 
-// Initialize session middleware first
-app.use(session({
+// Session store reference for WebSocket authentication
+let sessionStore;
+
+// Session parser for WebSocket connections
+function parseWebSocketSession(cookieHeader, callback) {
+  if (!cookieHeader) {
+    return callback(null, null);
+  }
+  
+  try {
+    const cookies = cookie.parse(cookieHeader);
+    const sessionId = cookies['connect.sid'];
+    
+    if (!sessionId) {
+      return callback(null, null);
+    }
+    
+    // Remove the 's:' prefix if present and decode the session ID
+    const cleanSessionId = sessionId.replace(/^s:/, '').split('.')[0];
+    
+    // Get session from store
+    sessionStore.get(cleanSessionId, (err, session) => {
+      if (err || !session) {
+        return callback(null, null);
+      }
+      
+      // Check if user is authenticated via Passport
+      if (session.passport && session.passport.user) {
+        return callback(null, {
+          authenticated: true,
+          user: session.passport.user
+        });
+      }
+      
+      return callback(null, null);
+    });
+  } catch (error) {
+    callback(null, null);
+  }
+}
+
+// Session configuration (reusable for Express and WebSocket)
+const sessionConfig = {
   secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
@@ -76,7 +118,14 @@ app.use(session({
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
     sameSite: 'lax' // Allow cross-origin requests
   }
-}));
+};
+
+// Initialize session middleware first
+const sessionMiddleware = session(sessionConfig);
+app.use(sessionMiddleware);
+
+// Store session store reference for WebSocket authentication
+sessionStore = sessionMiddleware.store;
 
 app.use(passport.initialize());
 app.use(passport.session());
@@ -304,8 +353,27 @@ if (USE_TLS && fs.existsSync(TLS_KEY) && fs.existsSync(TLS_CERT)) {
   if (USE_TLS) console.warn('USE_TLS=true set but certificate files not found; starting HTTP instead');
 }
 
-// WebSocket server for /ssh
-const wss = new WebSocketServer({ server, path: '/ssh', maxPayload: 2 * 1024 * 1024 });
+// WebSocket server for /ssh with authentication
+const wss = new WebSocketServer({ 
+  server, 
+  path: '/ssh', 
+  maxPayload: 2 * 1024 * 1024,
+  verifyClient: (info, done) => {
+    // Parse and verify session during WebSocket upgrade
+    parseWebSocketSession(info.req.headers.cookie, (err, sessionData) => {
+      if (err || !sessionData || !sessionData.authenticated) {
+        console.log(`[WebSocket] Rejected connection from ${info.req.socket.remoteAddress}: Not authenticated`);
+        done(false, 401, 'Unauthorized: Authentication required');
+        return;
+      }
+      
+      console.log(`[WebSocket] Accepted connection from ${info.req.socket.remoteAddress} for user ${sessionData.user.email}`);
+      // Store session data on the request for use in connection handler
+      info.req.sessionData = sessionData;
+      done(true);
+    });
+  }
+});
 
 // Simple per-IP concurrent session limit
 const CONCURRENT_PER_IP = parseInt(process.env.CONCURRENT_PER_IP || '5', 10);
@@ -358,6 +426,15 @@ function safeParseJson(message) {
 // Each ws connection may bootstrap an SSH client
 wss.on('connection', (ws, req) => {
   const ip = req.socket.remoteAddress || 'unknown';
+  const sessionData = req.sessionData; // Session data from verifyClient
+  
+  if (!sessionData || !sessionData.authenticated) {
+    console.log(`[WebSocket] Unexpected unauthenticated connection from ${ip}`);
+    ws.close(1008, 'Authentication required');
+    return;
+  }
+  
+  console.log(`[WebSocket] New SSH connection from ${ip} for user ${sessionData.user.email} (${sessionData.user.name})`);
 
   const concurrent = incrIp(ip);
   if (concurrent > CONCURRENT_PER_IP) {
