@@ -100,6 +100,12 @@ function parseWebSocketSession(cookieHeader, callback) {
     return callback(null, null);
   }
   
+  // Check if sessionStore is available
+  if (!sessionStore) {
+    logMessage(`[WebSocket] Session store not available`);
+    return callback(null, null);
+  }
+  
   try {
     const cookies = cookie.parse(cookieHeader);
     const sessionId = cookies['connect.sid'];
@@ -118,6 +124,8 @@ function parseWebSocketSession(cookieHeader, callback) {
     }
     
     logMessage(`[WebSocket] Clean session ID: ${cleanSessionId}`);
+    logMessage(`[WebSocket] Session store type: ${typeof sessionStore}`);
+    logMessage(`[WebSocket] Session store has get method: ${typeof sessionStore.get}`);
     
     // Get session from store
     sessionStore.get(cleanSessionId, (err, session) => {
@@ -147,6 +155,7 @@ function parseWebSocketSession(cookieHeader, callback) {
     });
   } catch (error) {
     logMessage(`[WebSocket] Exception parsing session: ${error.message}`);
+    logMessage(`[WebSocket] Stack: ${error.stack}`);
     callback(null, null);
   }
 }
@@ -170,6 +179,8 @@ app.use(sessionMiddleware);
 
 // Store session store reference for WebSocket authentication
 sessionStore = sessionMiddleware.store;
+console.log(`[Server] Session store type: ${typeof sessionStore}`);
+console.log(`[Server] Session store has get method: ${typeof sessionStore.get}`);
 
 app.use(passport.initialize());
 app.use(passport.session());
