@@ -56,7 +56,11 @@ server {
 
     # FIX: Content Security Policy to resolve console errors
     # Added 'ws:' and 'wss:' to connect-src to allow WebSocket connections for Nginx UI
+    # SEO: Allow indexing and proper meta tags
     add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com https://cdn.jsdelivr.net https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' ws: wss: https://cloudflareinsights.com https://challenges.cloudflare.com; frame-src 'self' https://challenges.cloudflare.com;" always;
+    
+    # SEO: Additional headers for search engines
+    add_header X-Robots-Tag "index, follow, all" always;
 
     # Limits
     client_max_body_size 50M;
@@ -109,9 +113,26 @@ server {
         proxy_cache_bypass $http_upgrade;
     }
 
+    # SEO: Serve sitemap.xml with proper headers and caching
+    location = /sitemap.xml {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+        add_header Content-Type application/xml;
+        add_header Cache-Control "public, max-age=3600, s-maxage=86400";
+    }
+
+    # SEO: Serve robots.txt with proper headers and caching
     location = /robots.txt {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
         add_header Content-Type text/plain;
-        add_header Cache-Control "no-store, no-cache, must-revalidate";
-        return 200 "User-agent: *\nDisallow: /\n";
+        add_header Cache-Control "public, max-age=3600, s-maxage=86400";
+    }
+
+    # SEO: Optional OG image placeholder (create this file if you want custom social images)
+    location = /og-image.png {
+        root /var/www/keysocket;
+        add_header Cache-Control "public, max-age=86400, s-maxage=604800";
+        try_files $uri =404;
     }
 }

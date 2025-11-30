@@ -176,6 +176,48 @@ app.get('/index.html', serveIndex);
 
 app.get('/health', (req, res) => res.json({ ok: true, env: process.env.NODE_ENV || 'development' }));
 
+// Sitemap endpoint
+app.get('/sitemap.xml', (req, res) => {
+  res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+  const sitemapPath = path.join(__dirname, 'public', 'sitemap.xml');
+  if (fs.existsSync(sitemapPath)) {
+    return res.sendFile(sitemapPath);
+  }
+  // Fallback if file doesn't exist
+  const fallback = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://keysocket.eu/</loc>
+    <lastmod>${new Date().toISOString().split('T')[0]}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>`;
+  res.send(fallback);
+});
+
+// Robots.txt endpoint
+app.get('/robots.txt', (req, res) => {
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  const robotsPath = path.join(__dirname, 'robots.txt');
+  if (fs.existsSync(robotsPath)) {
+    return res.sendFile(robotsPath);
+  }
+  // Fallback if file doesn't exist
+  res.send(`User-agent: *
+Disallow: /private/
+Disallow: /admin/
+Disallow: /api/
+Disallow: /socket.io/
+Disallow: /*.json$
+Disallow: /*?*$
+Crawl-delay: 1
+
+Allow: /
+
+Sitemap: https://keysocket.eu/sitemap.xml`);
+});
+
 // Turnstile verification endpoint - accepts a client token and verifies with Cloudflare
 app.post('/turnstile-verify', (req, res) => {
   const token = (req.body && req.body.token) || '';
