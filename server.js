@@ -178,12 +178,22 @@ app.get('/health', (req, res) => res.json({ ok: true, env: process.env.NODE_ENV 
 
 // Sitemap endpoint
 app.get('/sitemap.xml', (req, res) => {
-  res.setHeader('Content-Type', 'application/xml; charset=utf-8');
   const sitemapPath = path.join(__dirname, 'sitemap.xml');
+  
+  // Set headers first
+  res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  
   if (fs.existsSync(sitemapPath)) {
-    return res.sendFile(sitemapPath);
+    try {
+      const xmlContent = fs.readFileSync(sitemapPath, 'utf8');
+      return res.status(200).send(xmlContent);
+    } catch (e) {
+      console.error('Error reading sitemap:', e);
+    }
   }
-  // Fallback if file doesn't exist
+  
+  // Fallback if file doesn't exist or can't be read
   const fallback = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
@@ -193,7 +203,7 @@ app.get('/sitemap.xml', (req, res) => {
     <priority>1.0</priority>
   </url>
 </urlset>`;
-  res.send(fallback);
+  res.status(200).send(fallback);
 });
 
 // Robots.txt endpoint

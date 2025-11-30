@@ -117,18 +117,38 @@ server {
     location = /sitemap.xml {
         proxy_pass http://127.0.0.1:3000;
         proxy_set_header Host $host;
-        add_header Content-Type application/xml;
-        add_header Cache-Control "public, max-age=3600, s-maxage=86400";
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # Ensure we don't override the application's Content-Type
+        proxy_hide_header Content-Type;
+        
+        # Add proper caching
+        add_header Cache-Control "public, max-age=3600, s-maxage=86400" always;
         access_log off;
+        
+        # Don't buffer the response
+        proxy_buffering off;
     }
 
     # SEO: Serve robots.txt with proper headers and caching
     location = /robots.txt {
         proxy_pass http://127.0.0.1:3000;
         proxy_set_header Host $host;
-        add_header Content-Type text/plain;
-        add_header Cache-Control "public, max-age=3600, s-maxage=86400";
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # Ensure we don't override the application's Content-Type
+        proxy_hide_header Content-Type;
+        
+        # Add proper caching
+        add_header Cache-Control "public, max-age=3600, s-maxage=86400" always;
         access_log off;
+        
+        # Don't buffer the response
+        proxy_buffering off;
     }
 
     # SEO: Optional OG image placeholder (create this file if you want custom social images)
