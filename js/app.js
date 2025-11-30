@@ -8,9 +8,11 @@
 
     const termEl = document.getElementById('terminal');
     const form = document.getElementById('connect-form');
+    const authBannerEl = document.getElementById('auth-banner');
     const authSelect = document.getElementById('auth-select');
     const passwordLabel = document.getElementById('password-label');
     const keyLabel = document.getElementById('key-label');
+    const passphraseLabel = document.getElementById('passphrase-label');
     const keyfileInput = document.getElementById('keyfile');
     const connectBtn = document.getElementById('connect-btn');
     const disconnectBtn = document.getElementById('disconnect-btn');
@@ -262,14 +264,35 @@
     let ksTurnstileRendered = false;
     let ksIsAuthenticated = false;
 
+    let uiBannerTimer = null;
+
+    function showConnectionBanner(message, kind) {
+        if (!authBannerEl) return;
+        if (uiBannerTimer) {
+            clearTimeout(uiBannerTimer);
+            uiBannerTimer = null;
+        }
+        authBannerEl.textContent = message || '';
+        authBannerEl.classList.remove('auth-banner--success', 'auth-banner--error', 'auth-banner--info');
+        if (kind === 'success') authBannerEl.classList.add('auth-banner--success');
+        else if (kind === 'error') authBannerEl.classList.add('auth-banner--error');
+        else if (kind === 'info') authBannerEl.classList.add('auth-banner--info');
+        authBannerEl.hidden = false;
+        uiBannerTimer = setTimeout(() => {
+            authBannerEl.hidden = true;
+        }, 6000);
+    }
+
     function setAuthUI() {
         if (!authSelect) return;
         if (authSelect.value === 'password') {
             if (passwordLabel) passwordLabel.style.display = '';
             if (keyLabel) keyLabel.style.display = 'none';
+            if (passphraseLabel) passphraseLabel.style.display = 'none';
         } else {
             if (passwordLabel) passwordLabel.style.display = 'none';
             if (keyLabel) keyLabel.style.display = '';
+            if (passphraseLabel) passphraseLabel.style.display = '';
         }
     }
 
@@ -682,6 +705,7 @@
                 // token missing or expired (with 2s safety margin) -> re-run Turnstile
                 reRunTurnstile();
                 try { term.writeln('\r\n[INFO] Turnstile token missing or expired; please complete verification.'); } catch (e) {}
+                showConnectionBanner('Turnstile verification required before connecting.', 'info');
                 return;
             }
         }
@@ -697,10 +721,18 @@
                 username: form.username.value,
                 auth: authSelect ? authSelect.value : 'password'
             };
-            if (authSelect && authSelect.value === 'password') payload.password = form.password.value;
-            else payload.privateKey = privateKeyText || null;
+            if (authSelect && authSelect.value === 'password') {
+                payload.password = form.password.value;
+            } else {
+                payload.privateKey = privateKeyText || null;
+                // Optional passphrase for encrypted private keys (not stored anywhere)
+                if (form.passphrase && form.passphrase.value) {
+                    payload.passphrase = form.passphrase.value;
+                }
+            }
 
             socket.send(JSON.stringify(payload));
+            showConnectionBanner('Connecting to SSH host...', 'info');
             if (connectBtn) connectBtn.disabled = true;
             if (disconnectBtn) disconnectBtn.disabled = false;
         });
@@ -709,9 +741,16 @@
             if (typeof ev.data === 'string') {
                 try {
                     const msg = JSON.parse(ev.data);
-                    if (msg.type === 'error') term.writeln('\r\n[ERROR] ' + msg.message);
-                    else if (msg.type === 'ready') term.writeln('\r\n[SSH Ready]');
-                    else if (msg.type === 'ssh-closed') term.writeln('\r\n[SSH Closed]');
+                    if (msg.type === 'error') {
+                        term.writeln('\r\n[ERROR] ' + msg.message);
+                        showConnectionBanner(msg.message || 'SSH error occurred.', 'error');
+                    } else if (msg.type === 'ready') {
+                        term.writeln('\r\n[SSH Ready]');
+                        showConnectionBanner('SSH session ready.', 'success');
+                    } else if (msg.type === 'ssh-closed') {
+                        term.writeln('\r\n[SSH Closed]');
+                        showConnectionBanner('SSH session closed.', 'info');
+                    }
                 } catch (e) {
                     term.writeln('\r\n' + ev.data);
                 }
@@ -727,11 +766,13 @@
             socket = null;
             if (connectBtn) connectBtn.disabled = false;
             if (disconnectBtn) disconnectBtn.disabled = true;
+            showConnectionBanner('Disconnected from server.', 'info');
         });
 
         socket.addEventListener('error', (err) => {
             try { term.writeln('\r\n[Socket error]'); } catch (e) {}
             console.error('ws error', err);
+            showConnectionBanner('WebSocket connection error.', 'error');
         });
 
         if (typeof term.onData === 'function') {

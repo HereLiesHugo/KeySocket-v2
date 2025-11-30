@@ -16,7 +16,7 @@ The primary goal of this project is to offer a secure alternative to traditional
 
 - **Web-Based Terminal:** A full-featured terminal emulator in the browser, powered by xterm.js with WebGL rendering for high performance.
 - **Secure Authentication:** All sessions are protected by mandatory Google OAuth 2.0 with Cloudflare Turnstile verification, ensuring that only authenticated users can access the gateway.
-- **Flexible SSH Authentication:** Supports both password and private key-based authentication for connecting to remote hosts.
+- **Flexible SSH Authentication:** Supports both password and private key-based authentication for connecting to remote hosts, with optional passphrase support for encrypted keys.
 - **Client-Side Key Handling:** Private keys are handled exclusively in the browser's memory and are never stored on the server, providing a clear security boundary.
 - **Mobile-First Design:** Includes a responsive on-screen keyboard with QWERTY, AZERTY, and symbol layouts, making it fully usable on tablets and phones.
 - **Customizable Terminal:** The terminal window is fully resizable with drag handles and includes a fullscreen mode for an immersive experience.
@@ -27,7 +27,7 @@ The primary goal of this project is to offer a secure alternative to traditional
 - **Responsive Design:** Fully responsive layout that adapts seamlessly to desktop, tablet, and mobile devices.
 - **Terminal Resizing:** Dynamic terminal resizing with proper SSH terminal size synchronization.
 - **Session Persistence:** Maintains user preferences and saved connections in browser local storage.
-- **Real-time Feedback:** Visual feedback for authentication status, connection states, and error messages.
+- **Real-time Feedback:** Visual feedback for authentication status, connection states, and error messages via non-intrusive UI banners.
 
 ## Security Model
 
@@ -37,7 +37,7 @@ Security is a primary consideration in KeySocket's design.
 - **WebSocket Security:** WebSocket connections are tightly integrated with the Express.js session middleware. Only authenticated users with a valid session can establish a WebSocket connection.
 - **Rate Limiting:** The server implements strict rate-limiting on all HTTP requests to prevent brute-force attacks and other abuse.
 - **Content Security Policy:** A strict CSP is enforced to prevent XSS attacks and ensure secure resource loading.
-- **Client-Side Private Keys:** To prevent the server from becoming a high-value target for key theft, private keys are never sent to or stored on the server. They are loaded into the browser's memory for the duration of the connection attempt only. Users are strongly encouraged to use passphrase-encrypted keys as a best practice.
+- **Client-Side Private Keys:** To prevent the server from becoming a high-value target for key theft, private keys are never sent to or stored on the server. They are loaded into the browser's memory for the duration of the connection attempt only. Optional passphrase support for encrypted keys is available, with passphrases never stored.
 - **Request Size Limits:** Configurable limits for request payloads and private key sizes to prevent resource exhaustion attacks.
 
 ## User Interface & Experience
@@ -51,6 +51,7 @@ KeySocket provides a modern, intuitive interface designed for both technical and
 - **Virtual Keyboard:** On-screen keyboard with multiple layouts (QWERTY, AZERTY, symbols) for mobile devices
 - **Theme Customization:** Choose from 7 pre-built themes or use the system default
 - **Settings Panel:** Centralized app management interface for connections and preferences
+- **UI Feedback Banners:** Non-intrusive status banners for connection progress, success, and errors
 
 ### Available Themes
 - **Dark:** Default dark theme with blue accents
@@ -66,6 +67,7 @@ KeySocket provides a modern, intuitive interface designed for both technical and
 - **Quick Access:** Dropdown menu for instant connection to saved hosts
 - **Edit & Delete:** Manage saved connections through the settings panel
 - **Auto-complete:** Host and username suggestions from saved connections
+- **Optional Key Passphrase:** Support for encrypted SSH keys with optional passphrase entry
 
 ## Getting Started
 
