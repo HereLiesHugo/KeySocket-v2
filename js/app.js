@@ -83,7 +83,15 @@
                 if (fit && typeof fit.fit === 'function') fit.fit();
             } catch (e) { /* ignore fit errors */ }
 
-            applyThemeFromStorage();
+            // Apply the stored theme after the terminal has been opened and sized,
+            // giving xterm a tick to finish internal initialization.
+            try {
+                setTimeout(() => {
+                    try {
+                        applyThemeFromStorage();
+                    } catch (e) {}
+                }, 0);
+            } catch (e) {}
 
             // initialize the virtual keyboard after terminal is ready
             initVirtualKeyboard();
