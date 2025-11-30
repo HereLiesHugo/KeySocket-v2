@@ -14,6 +14,7 @@ const http = require('http');
 const { Client } = require('ssh2');
 const { URL } = require('url');
 const cookie = require('cookie');
+const net = require('net');
 
 const app = express();
 
@@ -467,6 +468,56 @@ function safeParseJson(message) {
   try { return JSON.parse(message); } catch (e) { return null; }
 }
 
+// IP validation function to prevent SSRF attacks
+function isPrivateOrLocalIP(host) {
+  // Check for localhost variations
+  if (host === 'localhost' || host === '127.0.0.1' || host === '::1') {
+    return true;
+  }
+  
+  // Check if it's an IP address
+  if (net.isIP(host)) {
+    return net.isIP(host) && (
+      net.isIPv4(host) && (
+        // IPv4 private ranges
+        host.startsWith('10.') ||
+        host.startsWith('192.168.') ||
+        (host.startsWith('172.') && {
+          '16': true, '17': true, '18': true, '19': true,
+          '20': true, '21': true, '22': true, '23': true,
+          '24': true, '25': true, '26': true, '27': true,
+          '28': true, '29': true, '30': true, '31': true
+        }[host.split('.')[1]]) ||
+        host.startsWith('169.254.') || // Link-local
+        host.startsWith('127.') // Loopback
+      ) ||
+      net.isIPv6(host) && (
+        host.startsWith('fe80::') || // Link-local
+        host.startsWith('fc') || // Private
+        host.startsWith('fd') || // Private
+        host.startsWith('::1') || // Loopback
+        host.startsWith('::ffff:127') // IPv4-mapped localhost
+      )
+    );
+  }
+  
+  // For domain names, we could do DNS resolution here
+  // For now, we'll block suspicious domain patterns
+  const suspiciousPatterns = [
+    'localhost',
+    'local',
+    'internal',
+    'admin',
+    'management',
+    'gateway',
+    'router',
+    'switch',
+    'firewall'
+  ];
+  
+  return suspiciousPatterns.some(pattern => host.toLowerCase().includes(pattern));
+}
+
 // Each ws connection may bootstrap an SSH client
 wss.on('connection', (ws, req) => {
   const ip = req.socket.remoteAddress || 'unknown';
@@ -510,6 +561,18 @@ wss.on('connection', (ws, req) => {
         // Basic validation
         if (!host || !username) {
           ws.send(JSON.stringify({ type: 'error', message: 'Missing host or username' }));
+          ws.close();
+          return;
+        }
+
+        // SSRF Protection: Block private/local network access
+        if (isPrivateOrLocalIP(host)) {
+          const logMessage = `[WebSocket] BLOCKED SSRF attempt: ${host} from ${ip} (user: ${sessionData.user.email})`;
+          console.log(logMessage);
+          try {
+            fs.appendFileSync(path.join(__dirname, 'server.log'), new Date().toISOString() + ' - ' + logMessage + '\n');
+          } catch (e) {}
+          ws.send(JSON.stringify({ type: 'error', message: 'Access to local/private network denied' }));
           ws.close();
           return;
         }
