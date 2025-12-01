@@ -328,10 +328,15 @@ body {
 
 .command {
     color: #e2e8f0;
+    white-space: nowrap;
+    overflow: hidden;
+    display: inline-block;
+    max-width: 100%;
 }
 
 .command.typing {
     animation: typing 2s steps(20) infinite;
+    border-right: 2px solid #22c55e;
 }
 
 .output {
