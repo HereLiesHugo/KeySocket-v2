@@ -2,26 +2,21 @@
 document.addEventListener('DOMContentLoaded', function() {
     const mobileMenu = document.getElementById('mobile-menu');
     const navMenu = document.querySelector('.nav-menu');
-    const darkModeToggle = document.getElementById('dark-mode-toggle');
 
-    // Initialize dark mode
-    initializeDarkMode();
-
-    // Mobile menu toggle
-    mobileMenu.addEventListener('click', function() {
-        mobileMenu.classList.toggle('active');
-        navMenu.classList.toggle('active');
-    });
-
-    // Dark mode toggle
-    darkModeToggle.addEventListener('click', function() {
-        toggleDarkMode();
-    });
+    // Mobile menu toggle (only if element exists)
+    if (mobileMenu) {
+        mobileMenu.addEventListener('click', function() {
+            mobileMenu.classList.toggle('active');
+            navMenu.classList.toggle('active');
+        });
+    }
 
     // Close mobile menu when clicking on a link
     document.querySelectorAll('.nav-menu a').forEach(link => {
         link.addEventListener('click', function() {
-            mobileMenu.classList.remove('active');
+            if (mobileMenu) {
+                mobileMenu.classList.remove('active');
+            }
             navMenu.classList.remove('active');
         });
     });
@@ -35,7 +30,9 @@ document.addEventListener('DOMContentLoaded', function() {
             
             if (target) {
                 // Close mobile menu if open
-                mobileMenu.classList.remove('active');
+                if (mobileMenu) {
+                    mobileMenu.classList.remove('active');
+                }
                 navMenu.classList.remove('active');
                 
                 // Calculate offset with navbar height
@@ -115,12 +112,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
         
         if (scrollTop > 100) {
-            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-            navbar.style.background = isDark ? 'rgba(15, 23, 42, 0.98)' : 'rgba(255, 255, 255, 0.98)';
+            // Use dark theme background for KeySocket
+            navbar.style.background = 'rgba(15, 23, 42, 0.98)';
             navbar.style.boxShadow = '0 2px 20px rgba(0, 0, 0, 0.1)';
         } else {
-            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-            navbar.style.background = isDark ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.95)';
+            // Use dark theme background for KeySocket
+            navbar.style.background = 'rgba(15, 23, 42, 0.95)';
             navbar.style.boxShadow = 'none';
         }
         
@@ -142,52 +139,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Update copyright year
     updateCopyrightYear();
 });
-
-// Dark Mode Functionality
-function initializeDarkMode() {
-    // Check for saved theme preference or default to light mode
-    const savedTheme = localStorage.getItem('theme');
-    const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    
-    if (savedTheme) {
-        document.documentElement.setAttribute('data-theme', savedTheme);
-    } else if (systemPrefersDark) {
-        document.documentElement.setAttribute('data-theme', 'dark');
-    } else {
-        document.documentElement.setAttribute('data-theme', 'light');
-    }
-
-    // Listen for system theme changes
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-        if (!localStorage.getItem('theme')) {
-            document.documentElement.setAttribute('data-theme', e.matches ? 'dark' : 'light');
-        }
-    });
-}
-
-function toggleDarkMode() {
-    const currentTheme = document.documentElement.getAttribute('data-theme');
-    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-    
-    document.documentElement.setAttribute('data-theme', newTheme);
-    localStorage.setItem('theme', newTheme);
-    
-    // Update navbar background immediately
-    const navbar = document.querySelector('.navbar');
-    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-    
-    if (scrollTop > 100) {
-        navbar.style.background = newTheme === 'dark' ? 'rgba(15, 23, 42, 0.98)' : 'rgba(255, 255, 255, 0.98)';
-    } else {
-        navbar.style.background = newTheme === 'dark' ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.95)';
-    }
-    
-    // Add transition effect
-    document.body.style.transition = 'background-color 0.3s ease, color 0.3s ease';
-    
-    // Show notification
-    showNotification(`${newTheme === 'dark' ? 'Dark' : 'Light'} mode activated`, 'info');
-}
 
 // Terminal Demo Functionality
 function initializeTerminal() {

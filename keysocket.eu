@@ -55,11 +55,13 @@ server {
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
 
     # FIX: Content Security Policy to resolve console errors
+    # Added 'sha256-51AbVm95/bXyZWOhL4XUEH7oO//14QSsMzS9dJ4HAHI=' and 'sha256-YjP9NejlrkKr07NlpI0X4jV+JyxjWifNyQbWA/sqfu8=' for inline scripts
+    # Added 'https://static.cloudflareinsights.com' to connect-src and script-src
     # Added 'ws:' and 'wss:' to connect-src to allow WebSocket connections for Nginx UI
     # Added Font Awesome CDN to font-src and style-src for icons and webfonts
     # SEO: Allow indexing and proper meta tags
     # REMOVED 'unsafe-inline' from script-src
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-eval' https://challenges.cloudflare.com https://cdn.jsdelivr.net https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https:; connect-src 'self' ws: wss: https://cloudflareinsights.com https://challenges.cloudflare.com; frame-src 'self' https://challenges.cloudflare.com;" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-eval' 'sha256-51AbVm95/bXyZWOhL4XUEH7oO//14QSsMzS9dJ4HAHI=' 'sha256-YjP9NejlrkKr07NlpI0X4jV+JyxjWifNyQbWA/sqfu8=' https://challenges.cloudflare.com https://cdn.jsdelivr.net https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https:; connect-src 'self' ws: wss: https://cloudflareinsights.com https://challenges.cloudflare.com https://static.cloudflareinsights.com; frame-src 'self' https://challenges.cloudflare.com;" always;
     
     # SEO: Additional headers for search engines
     add_header X-Robots-Tag "index, follow, all" always;
@@ -157,42 +159,26 @@ server {
         proxy_cache_bypass $http_upgrade;
     }
 
-    # SEO: Serve sitemap.xml with proper headers and caching
+    # SEO: Serve sitemap.xml as static file with proper headers and caching
     location = /sitemap.xml {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        
-        # Ensure we don't override the application's Content-Type
-        proxy_hide_header Content-Type;
-        
-        # Add proper caching
+        root /var/www/keysocket.eu;
         add_header Cache-Control "public, max-age=3600, s-maxage=86400" always;
+        add_header Content-Type "application/xml; charset=utf-8" always;
         access_log off;
         
-        # Don't buffer the response
-        proxy_buffering off;
+        # Ensure proper XML serving
+        try_files $uri =404;
     }
 
-    # SEO: Serve robots.txt with proper headers and caching
+    # SEO: Serve robots.txt as static file with proper headers and caching
     location = /robots.txt {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        
-        # Ensure we don't override the application's Content-Type
-        proxy_hide_header Content-Type;
-        
-        # Add proper caching
+        root /var/www/keysocket.eu;
         add_header Cache-Control "public, max-age=3600, s-maxage=86400" always;
+        add_header Content-Type "text/plain; charset=utf-8" always;
         access_log off;
         
-        # Don't buffer the response
-        proxy_buffering off;
+        # Ensure proper file serving
+        try_files $uri =404;
     }
 
     # SEO: Optional OG image placeholder (create this file if you want custom social images)
