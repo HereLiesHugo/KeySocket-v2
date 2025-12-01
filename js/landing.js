@@ -3,16 +3,20 @@ document.addEventListener('DOMContentLoaded', function() {
     const mobileMenu = document.getElementById('mobile-menu');
     const navMenu = document.querySelector('.nav-menu');
 
-    // Mobile menu toggle
-    mobileMenu.addEventListener('click', function() {
-        mobileMenu.classList.toggle('active');
-        navMenu.classList.toggle('active');
-    });
+    // Mobile menu toggle (only if element exists)
+    if (mobileMenu) {
+        mobileMenu.addEventListener('click', function() {
+            mobileMenu.classList.toggle('active');
+            navMenu.classList.toggle('active');
+        });
+    }
 
     // Close mobile menu when clicking on a link
     document.querySelectorAll('.nav-menu a').forEach(link => {
         link.addEventListener('click', function() {
-            mobileMenu.classList.remove('active');
+            if (mobileMenu) {
+                mobileMenu.classList.remove('active');
+            }
             navMenu.classList.remove('active');
         });
     });
@@ -26,7 +30,9 @@ document.addEventListener('DOMContentLoaded', function() {
             
             if (target) {
                 // Close mobile menu if open
-                mobileMenu.classList.remove('active');
+                if (mobileMenu) {
+                    mobileMenu.classList.remove('active');
+                }
                 navMenu.classList.remove('active');
                 
                 // Calculate offset with navbar height
