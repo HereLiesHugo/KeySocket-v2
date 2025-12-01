@@ -166,9 +166,6 @@ server {
         add_header Content-Type "application/xml; charset=utf-8" always;
         access_log off;
         
-        # Security: Allow search engines to access sitemap
-        add_header X-Robots-Tag "noindex" always;
-        
         # Ensure proper XML serving
         try_files $uri =404;
     }
@@ -179,9 +176,6 @@ server {
         add_header Cache-Control "public, max-age=3600, s-maxage=86400" always;
         add_header Content-Type "text/plain; charset=utf-8" always;
         access_log off;
-        
-        # Security: Allow search engines to access robots.txt
-        add_header X-Robots-Tag "noindex" always;
         
         # Ensure proper file serving
         try_files $uri =404;
