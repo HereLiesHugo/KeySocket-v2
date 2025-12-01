@@ -190,7 +190,7 @@ server {
     }
 
     # Static OG image
-    location = /og-image.png {
+    location = /img/logo/keysocket-high-resolution-logo.png {
         root /var/www/keysocket.eu; # FIXED path
         add_header Cache-Control "public, max-age=86400, s-maxage=604800";
         try_files $uri =404;
