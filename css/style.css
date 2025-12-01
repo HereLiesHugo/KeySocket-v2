@@ -687,6 +687,38 @@ main {
 }
 
 /* ============================================================================
+   INLINE STYLE REPLACEMENTS
+   ============================================================================ */
+.label-hidden {
+  display: none;
+}
+
+.terminal-controls-text {
+  font-size: 11px;
+  color: var(--muted);
+  flex: 1;
+}
+
+#turnstile-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 9999;
+}
+
+#turnstile-overlay .turnstile-content {
+  background: #fff;
+  padding: 24px;
+  border-radius: 8px;
+  max-width: 420px;
+  width: 90%;
+  text-align: center;
+}
+
+/* ============================================================================
    RESPONSIVE DESIGN
    - Stack layout and show virtual keyboard on smaller screens
    - Simplify app management grid for mobile
