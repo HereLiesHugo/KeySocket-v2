@@ -687,6 +687,30 @@ main {
 }
 
 /* ============================================================================
+   SECURITY DISCLAIMER
+   ============================================================================ */
+.security-disclaimer {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+  background: linear-gradient(135deg, rgba(110, 231, 183, 0.1), rgba(14, 184, 183, 0.05));
+  border: 1px solid rgba(110, 231, 183, 0.2);
+  border-radius: var(--radius-sm);
+  color: var(--accent);
+  font-size: 12px;
+  line-height: 1.4;
+  animation: fadeIn var(--transition-smooth) ease;
+}
+
+.security-disclaimer i {
+  color: var(--accent);
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+/* ============================================================================
    INLINE STYLE REPLACEMENTS
    ============================================================================ */
 .label-hidden {

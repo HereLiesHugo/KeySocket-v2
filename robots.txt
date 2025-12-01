@@ -1,10 +1,60 @@
-User-agent: *
-Disallow: /private/
-Disallow: /admin/
-Disallow: /api/
+# Google crawlers specifically allowed for proper indexing
+User-agent: Googlebot
+Allow: /
+Allow: /$
+Allow: /css/
+Allow: /js/
+Allow: /images/
+Allow: /lib/
+Allow: /pages/privacy.html
+Disallow: /admin
+Disallow: /api
+Disallow: /private
 Disallow: /socket.io/
 Disallow: /auth/
 Disallow: /turnstile-verify
 Disallow: /*.json$
 
+User-agent: Googlebot-Image
+Allow: /images/
+Allow: /css/
+Allow: /lib/
+
+User-agent: Googlebot-News
+Allow: /
+
+# All other user agents
+User-agent: *
+Allow: /
+
+# Homepage
+Allow: /$
+Disallow: /admin
+Disallow: /api
+Disallow: /private
+Disallow: /socket.io/
+Disallow: /auth/
+Disallow: /turnstile-verify
+Disallow: /*.json$
+
+# Console - noindex, nofollow but allow crawling for sitemap
+Disallow: /console
+
+# Static resources
+Allow: /css/
+Allow: /js/
+Allow: /images/
+Allow: /lib/
+Allow: /favicon.ico
+Allow: /apple-touch-icon.png
+Allow: /favicon-32x32.png
+Allow: /favicon-16x16.png
+
+# External resources
+Allow: /pages/privacy.html
+
+# Sitemap
 Sitemap: https://keysocket.eu/sitemap.xml
+
+# Crawl delay (optional, be nice to servers)
+Crawl-delay: 1
