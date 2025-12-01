@@ -14,7 +14,6 @@ const https = require('https');
 const http = require('http');
 const { Client } = require('ssh2');
 const dns = require('dns').promises;
-const net = require('net');
 const { URL } = require('url');
 const cookie = require('cookie');
 
