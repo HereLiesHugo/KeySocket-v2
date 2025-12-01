@@ -55,11 +55,13 @@ server {
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
 
     # FIX: Content Security Policy to resolve console errors
+    # Added 'sha256-51AbVm95/bXyZWOhL4XUEH7oO//14QSsMzS9dJ4HAHI=' for inline script
+    # Added 'https://static.cloudflareinsights.com' to connect-src and script-src
     # Added 'ws:' and 'wss:' to connect-src to allow WebSocket connections for Nginx UI
     # Added Font Awesome CDN to font-src and style-src for icons and webfonts
     # SEO: Allow indexing and proper meta tags
     # REMOVED 'unsafe-inline' from script-src
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-eval' https://challenges.cloudflare.com https://cdn.jsdelivr.net https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https:; connect-src 'self' ws: wss: https://cloudflareinsights.com https://challenges.cloudflare.com; frame-src 'self' https://challenges.cloudflare.com;" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-eval' 'sha256-51AbVm95/bXyZWOhL4XUEH7oO//14QSsMzS9dJ4HAHI=' https://challenges.cloudflare.com https://cdn.jsdelivr.net https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https:; connect-src 'self' ws: wss: https://cloudflareinsights.com https://challenges.cloudflare.com https://static.cloudflareinsights.com; frame-src 'self' https://challenges.cloudflare.com;" always;
     
     # SEO: Additional headers for search engines
     add_header X-Robots-Tag "index, follow, all" always;
