@@ -75,10 +75,22 @@ body {
 .nav-logo {
     display: flex;
     align-items: center;
+    gap: 12px;
     font-size: 1.5rem;
     font-weight: 700;
-    color: var(--primary-color);
+    color: var(--text-primary);
     text-decoration: none;
+    transition: color 0.3s ease;
+}
+
+.nav-logo:hover {
+    color: var(--primary-color);
+}
+
+.nav-logo .logo-image {
+    height: 40px;
+    width: auto;
+    display: block;
 }
 
 .nav-logo i {
@@ -651,7 +663,6 @@ body {
 .footer-content {
     display: flex;
     justify-content: space-between;
-    align-items: center;
     flex-wrap: wrap;
     gap: 2rem;
 }
@@ -662,6 +673,13 @@ body {
     font-size: 1.25rem;
     font-weight: 600;
     color: var(--primary-color);
+}
+
+.footer-logo .footer-logo-image {
+    height: 32px;
+    width: auto;
+    display: block;
+    margin-right: 10px;
 }
 
 .footer-logo i {
