@@ -740,162 +740,166 @@ wss.on('connection', (ws, req) => {
   ws.on('pong', () => { ws.isAlive = true; });
 
   // messages: first expecting a JSON connect message. After connected, binary messages are sent to ssh.
-  ws.on('message', async (msg, isBinary) => {
-    if (!alive) return;
-    if (!isBinary) {
-      const parsed = safeParseJson(msg.toString());
-      if (!parsed) return;
-      if (parsed.type === 'connect') {
-        const { host, port, username, auth } = parsed;
-        // Basic validation
-        if (!host || !username) {
-          ws.send(JSON.stringify({ type: 'error', message: 'Missing host or username' }));
-          ws.close();
-          return;
-        }
-        // Resolve DNS before validating to prevent DNS rebinding / SSRF
-        let resolvedAddrs;
-        try {
-          resolvedAddrs = await dns.lookup(host, { all: true });
-        } catch (e) {
-          logger.warn('DNS resolution failed for host', { host, error: e.message });
-          ws.send(JSON.stringify({ type: 'error', message: 'DNS resolution failed' }));
-          ws.close();
-          return;
-        }
-
-        if (!resolvedAddrs || resolvedAddrs.length === 0) {
-          ws.send(JSON.stringify({ type: 'error', message: 'DNS resolution failed' }));
-          ws.close();
-          return;
-        }
-
-        // If any resolved address is private/local, block the request (conservative)
-        for (const a of resolvedAddrs) {
-          if (isPrivateOrLocalIP(a.address)) {
-            logger.warn('SSRF attempt blocked - private/local network access denied', {
-              target_host: host,
-              resolved_address: a.address,
-              source_ip: ip,
-              user_email: sessionData.user && sessionData.user.email,
-              user_agent: req.headers['user-agent'] || 'unknown',
-              port: port || 22,
-              username: username
-            });
-            ws.send(JSON.stringify({ type: 'error', message: 'Access to local/private network denied' }));
+  ws.on('message', (msg, isBinary) => {
+    try {
+      if (!alive) return;
+      if (!isBinary) {
+        const parsed = safeParseJson(msg.toString());
+        if (!parsed) return;
+        if (parsed.type === 'connect') {
+          const { host, port, username, auth } = parsed;
+          // Basic validation
+          if (!host || !username) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Missing host or username' }));
             ws.close();
             return;
           }
-        }
-        
-        logger.info('SSH connection attempt', {
-          target_host: host,
-          target_port: port || 22,
-          username: username,
-          auth_type: auth,
-          source_ip: ip,
-          user_email: sessionData.user.email
-        });
+          // Resolve DNS before validating to prevent DNS rebinding / SSRF (callback-based for safety)
+          dns.lookup(host, { all: true }, (err, addrs) => {
+            try {
+              if (err || !addrs || addrs.length === 0) {
+                try { ws.send(JSON.stringify({ type: 'error', message: 'DNS resolution failed' })); } catch (e) {}
+                try { ws.close(); } catch (e) {}
+                return;
+              }
 
-        // Create ssh client
-        sshClient = new Client();
-        ws._sshClient = sshClient;
-        const connectionStartTime = Date.now();
-        // Use the first resolved public IP to connect (avoid DNS re-resolution by ssh2)
-        const chosen = resolvedAddrs[0] && resolvedAddrs[0].address ? resolvedAddrs[0].address : host;
-        const connectOpts = {
-          host: chosen,
-          port: parseInt(port || '22', 10),
-          username: username,
-          readyTimeout: 20000,
-          algorithms: { // keep defaults but allow modern servers
-          }
-        };
-        if (auth === 'password') connectOpts.password = parsed.password;
-        else if (auth === 'key') connectOpts.privateKey = parsed.privateKey || parsed.key;
-        if (parsed.passphrase) connectOpts.passphrase = parsed.passphrase;
+              // If any resolved address is private/local, block the request (conservative)
+              for (const a of addrs) {
+                if (isPrivateOrLocalIP(a.address)) {
+                  logger.warn('SSRF attempt blocked - private/local network access denied', {
+                    target_host: host,
+                    resolved_address: a.address,
+                    source_ip: ip,
+                    user_email: sessionData.user && sessionData.user.email,
+                    user_agent: req.headers['user-agent'] || 'unknown',
+                    port: port || 22,
+                    username: username
+                  });
+                  try { ws.send(JSON.stringify({ type: 'error', message: 'Access to local/private network denied' })); } catch (e) {}
+                  try { ws.close(); } catch (e) {}
+                  return;
+                }
+              }
+              
+              logger.info('SSH connection attempt', {
+                target_host: host,
+                target_port: port || 22,
+                username: username,
+                auth_type: auth,
+                source_ip: ip,
+                user_email: sessionData.user.email
+              });
 
-        // Optional: restrict destinations in production via env
-        const allowed = process.env.ALLOWED_HOSTS; // comma separated
-        if (allowed) {
-          const list = allowed.split(',').map(s => s.trim()).filter(Boolean);
-          if (!list.includes(host)) {
-            ws.send(JSON.stringify({ type: 'error', message: 'Destination not allowed' }));
-            ws.close();
-            return;
-          }
-        }
+              // Create ssh client
+              sshClient = new Client();
+              ws._sshClient = sshClient;
+              const connectionStartTime = Date.now();
+              // Use the first resolved public IP to connect (avoid DNS re-resolution by ssh2)
+              const chosen = (addrs[0] && addrs[0].address) ? addrs[0].address : host;
+              const connectOpts = {
+                host: chosen,
+              port: parseInt(port || '22', 10),
+                username: username,
+                readyTimeout: 20000,
+                algorithms: { // keep defaults but allow modern servers
+                }
+              };
+              if (auth === 'password') connectOpts.password = parsed.password;
+              else if (auth === 'key') connectOpts.privateKey = parsed.privateKey || parsed.key;
+              if (parsed.passphrase) connectOpts.passphrase = parsed.passphrase;
 
-        sshClient.on('ready', () => {
-          ws.send(JSON.stringify({ type: 'ready' }));
-          sshClient.shell({ term: 'xterm-color', cols: 80, rows: 24 }, (err, stream) => {
-            if (err) {
-              ws.send(JSON.stringify({ type: 'error', message: 'Failed to start shell' }));
-              ws.close();
-              sshClient.end();
-              return;
+              // Optional: restrict destinations in production via env
+              const allowed = process.env.ALLOWED_HOSTS; // comma separated
+              if (allowed) {
+                const list = allowed.split(',').map(s => s.trim()).filter(Boolean);
+                if (!list.includes(host)) {
+                  try { ws.send(JSON.stringify({ type: 'error', message: 'Destination not allowed' })); } catch (e) {}
+                  try { ws.close(); } catch (e) {}
+                  return;
+                }
+              }
+
+              sshClient.on('ready', () => {
+                ws.send(JSON.stringify({ type: 'ready' }));
+                sshClient.shell({ term: 'xterm-color', cols: 80, rows: 24 }, (err, stream) => {
+                  if (err) {
+                    ws.send(JSON.stringify({ type: 'error', message: 'Failed to start shell' }));
+                    ws.close();
+                    sshClient.end();
+                    return;
+                  }
+                  sshStream = stream;
+                  ws._sshStream = stream;
+                  stream.on('data', (data) => {
+                    // send raw binary data back to client
+                    try { ws.send(data); } catch (e) {}
+                  });
+                  stream.on('close', () => {
+                    try { ws.send(JSON.stringify({ type: 'ssh-closed' })); } catch (e) {}
+                    ws.close();
+                  });
+                });
+              });
+
+              sshClient.on('error', (err) => {
+                logger.error('SSH connection error', {
+                  target_host: host,
+                  target_port: port || 22,
+                  username: username,
+                  source_ip: ip,
+                  user_email: sessionData.user.email,
+                  error: err.message,
+                  error_code: err.code,
+                  connection_time_ms: Date.now() - connectionStartTime
+                });
+                
+                try { ws.send(JSON.stringify({ type: 'error', message: err.message })); } catch (e) {}
+                try { ws.close(); } catch (e) {}
+              });
+
+              sshClient.on('end', () => {
+                logger.info('SSH connection ended', {
+                  target_host: host,
+                  target_port: port || 22,
+                  username: username,
+                  source_ip: ip,
+                  user_email: sessionData.user.email
+                });
+              });
+
+              sshClient.on('close', () => {
+                logger.info('SSH connection closed', {
+                  target_host: host,
+                  target_port: port || 22,
+                  username: username,
+                  source_ip: ip,
+                  user_email: sessionData.user.email
+                });
+              });
+
+              sshClient.connect(connectOpts);
+            } catch (callbackErr) {
+              logger.error('Error in DNS lookup callback', { error: callbackErr.message, host });
+              try { ws.send(JSON.stringify({ type: 'error', message: 'Connection setup failed' })); } catch (e) {}
+              try { ws.close(); } catch (e) {}
             }
-            sshStream = stream;
-            ws._sshStream = stream;
-            stream.on('data', (data) => {
-              // send raw binary data back to client
-              try { ws.send(data); } catch (e) {}
-            });
-            stream.on('close', () => {
-              try { ws.send(JSON.stringify({ type: 'ssh-closed' })); } catch (e) {}
-              ws.close();
-            });
           });
-        });
-
-        sshClient.on('error', (err) => {
-          logger.error('SSH connection error', {
-            target_host: host,
-            target_port: port || 22,
-            username: username,
-            source_ip: ip,
-            user_email: sessionData.user.email,
-            error: err.message,
-            error_code: err.code,
-            connection_time_ms: Date.now() - connectionStartTime
-          });
-          
-          ws.send(JSON.stringify({ type: 'error', message: err.message }));
-          ws.close();
-        });
-
-        sshClient.on('end', () => {
-          logger.info('SSH connection ended', {
-            target_host: host,
-            target_port: port || 22,
-            username: username,
-            source_ip: ip,
-            user_email: sessionData.user.email
-          });
-        });
-
-        sshClient.on('close', () => {
-          logger.info('SSH connection closed', {
-            target_host: host,
-            target_port: port || 22,
-            username: username,
-            source_ip: ip,
-            user_email: sessionData.user.email
-          });
-        });
-
-        sshClient.connect(connectOpts);
-      } else if (parsed.type === 'resize') {
-        const cols = parseInt(parsed.cols || '80', 10);
-        const rows = parseInt(parsed.rows || '24', 10);
-        if (sshStream && sshStream.setWindow) sshStream.setWindow(rows, cols, rows * 8, cols * 8);
+        } else if (parsed.type === 'resize') {
+          const cols = parseInt(parsed.cols || '80', 10);
+          const rows = parseInt(parsed.rows || '24', 10);
+          if (sshStream && sshStream.setWindow) sshStream.setWindow(rows, cols, rows * 8, cols * 8);
+        }
+        return;
       }
-      return;
-    }
 
-    // binary message -> forward to ssh input
-    if (sshStream) {
-      try { sshStream.write(msg); } catch (e) {}
+      // binary message -> forward to ssh input
+      if (sshStream) {
+        try { sshStream.write(msg); } catch (e) {}
+      }
+    } catch (handlerErr) {
+      logger.error('WebSocket message handler error', { error: handlerErr.message });
+      try { ws.send(JSON.stringify({ type: 'error', message: 'Internal error' })); } catch (e) {}
+      try { ws.close(); } catch (e) {}
     }
   });
 
