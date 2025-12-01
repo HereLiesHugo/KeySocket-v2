@@ -130,6 +130,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize terminal demo
     initializeTerminal();
     
+    // Initialize terminal typing animation
+    initializeTerminalTypingAnimation();
+    
     // Initialize contact form
     initializeContactForm();
     
@@ -553,32 +556,17 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-// Typing Animation for Hero Terminal
-document.addEventListener('DOMContentLoaded', function() {
-    const typingElements = document.querySelectorAll('.typing');
+// Terminal Typing Animation for Hero Section
+function initializeTerminalTypingAnimation() {
+    const command = document.querySelector('.command');
     
-    typingElements.forEach(element => {
-        const text = element.textContent;
-        element.textContent = '';
-        let index = 0;
-        
-        function type() {
-            if (index < text.length) {
-                element.textContent += text.charAt(index);
-                index++;
-                setTimeout(type, 100);
-            } else {
-                setTimeout(() => {
-                    element.textContent = '';
-                    index = 0;
-                    type();
-                }, 2000);
-            }
-        }
-        
-        type();
-    });
-});
+    if (!command) return;
+    
+    // Add typing class to trigger CSS animation after page load
+    setTimeout(() => {
+        command.classList.add('typing');
+    }, 1000);
+}
 
 // Performance optimization - Debounce scroll events
 function debounce(func, wait) {
@@ -638,6 +626,7 @@ document.addEventListener('keydown', function(e) {
 window.KeySocketLanding = {
     showNotification,
     initializeTerminal,
+    initializeTerminalTypingAnimation,
     initializeContactForm,
     initializeScrollAnimations
 };
