@@ -6,13 +6,12 @@ map $http_upgrade $connection_upgrade {
     ''           close;
 }
 
-# Bot filter - FIXED
-# I have removed Googlebot, Bingbot, etc. from this list.
-# Since you use Cloudflare, it is safer to rely on their WAF for bot protection.
+# --- BOT FILTER FIXED ---
+# Googlebot and other search engines have been REMOVED from this list.
+# We only block aggressive scrapers here.
 map $http_user_agent $is_bad_bot {
     default 0;
-    # Add specific bad actors here if needed, e.g.:
-    # ~*(BadScraper123|MaliciousBot) 1;
+    ~*(360Spider|facebot|AhrefsBot|SEMrushBot|DotBot|MJ12bot|Heritrix) 1;
 }
 
 # Redirect HTTP -> HTTPS
@@ -76,7 +75,8 @@ server {
         frame-src 'self' https://challenges.cloudflare.com;
     " always;
 
-    # Global SEO Header - ALLOWS indexing
+    # --- GLOBAL SEO HEADER ---
+    # Explicitly allows indexing for the whole site
     add_header X-Robots-Tag "index, follow" always;
 
     # Limits
@@ -170,7 +170,7 @@ server {
         proxy_cache_bypass $http_upgrade;
     }
 
-    # sitemap.xml
+    # --- SITEMAP CONFIG ---
     location = /sitemap.xml {
         root /var/www/keysocket.eu;
         access_log off;
@@ -189,9 +189,10 @@ server {
         try_files $uri =404;
     }
 
-    # Static OG image
-    location = /img/logo/keysocket-high-resolution-logo.png {
-        root /var/www/keysocket.eu; # FIXED path
+    # --- IMAGES CONFIG ---
+    # This handles the specific logo path in your sitemap
+    location /img/ {
+        root /var/www/keysocket.eu;
         add_header Cache-Control "public, max-age=86400, s-maxage=604800";
         try_files $uri =404;
     }
