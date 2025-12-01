@@ -4,7 +4,7 @@
     
     <url>
         <loc>https://keysocket.eu/</loc>
-        <lastmod>2025-12-01</lastmod>
+        <lastmod>2025-11-01</lastmod>
         <changefreq>weekly</changefreq>
         <priority>1.0</priority>
         <image:image>
@@ -16,14 +16,14 @@
     
     <url>
         <loc>https://keysocket.eu/console</loc>
-        <lastmod>2025-12-01</lastmod>
+        <lastmod>2025-11-01</lastmod>
         <changefreq>monthly</changefreq>
         <priority>0.8</priority>
     </url>
     
     <url>
         <loc>https://keysocket.eu/privacy</loc>
-        <lastmod>2025-12-01</lastmod>
+        <lastmod>2025-11-01</lastmod>
         <changefreq>yearly</changefreq>
         <priority>0.5</priority>
     </url>
