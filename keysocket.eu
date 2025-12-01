@@ -79,7 +79,7 @@ server {
 
     # Remove file extensions from URLs - Specific handling for console page
     # Redirect .html to clean URL
-    location ~ ^/(console|index)\.html$ {
+    location ~ ^/(console|index|privacy)\.html$ {
         return 301 /$1;
     }
     
@@ -98,6 +98,18 @@ server {
     # Serve index page without extension by proxying to index.html
     location = /index {
         proxy_pass http://127.0.0.1:3000/index.html;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        proxy_hide_header Content-Security-Policy;
+    }
+
+    # Serve privacy page without extension by proxying to privacy.html
+    location = /privacy {
+        proxy_pass http://127.0.0.1:3000/pages/privacy.html;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
