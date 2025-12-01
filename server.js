@@ -13,6 +13,8 @@ const { WebSocketServer } = require('ws');
 const https = require('https');
 const http = require('http');
 const { Client } = require('ssh2');
+const dns = require('dns').promises;
+const net = require('net');
 const { URL } = require('url');
 const cookie = require('cookie');
 
@@ -595,6 +597,49 @@ function safeParseJson(message) {
   try { return JSON.parse(message); } catch (e) { return null; }
 }
 
+function ipv4ToInt(ip) {
+  return ip.split('.').reduce((acc, oct) => (acc << 8) + parseInt(oct, 10), 0) >>> 0;
+}
+
+function isPrivateIPv4(addr) {
+  // addr is dotted IPv4
+  const parts = addr.split('.').map(Number);
+  if (parts.length !== 4 || parts.some(isNaN)) return true;
+  const [a, b] = parts;
+  if (a === 10) return true;
+  if (a === 127) return true;
+  if (a === 169 && b === 254) return true; // link-local
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  if (a === 192 && b === 168) return true;
+  if (a === 100 && b >= 64 && b <= 127) return true; // CGN
+  if (a >= 224 && a <= 239) return true; // multicast
+  if (a === 0) return true;
+  return false;
+}
+
+function isPrivateIPv6(addr) {
+  if (!addr) return true;
+  const a = addr.toLowerCase();
+  if (a === '::1') return true; // loopback
+  if (a === '::' || a === '0:0:0:0:0:0:0:0') return true; // unspecified
+  if (a.startsWith('fe80') || a.startsWith('fe80:')) return true; // link-local fe80::/10
+  if (a.startsWith('fc') || a.startsWith('fd')) return true; // unique local fc00::/7
+  if (a.startsWith('ff') || a.startsWith('ff:')) return true; // multicast ff00::/8
+  // IPv4 mapped ::ffff: capture
+  const m = a.match(/::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+  if (m) return isPrivateIPv4(m[1]);
+  return false;
+}
+
+function isPrivateOrLocalIP(addr) {
+  if (!addr) return true;
+  const fam = net.isIP(addr);
+  if (fam === 4) return isPrivateIPv4(addr);
+  if (fam === 6) return isPrivateIPv6(addr);
+  // unknown, treat as private
+  return true;
+}
+
 // IP validation function to prevent SSRF attacks
 function isPrivateOrLocalIP(host) {
   // Check for localhost variations
@@ -695,7 +740,7 @@ wss.on('connection', (ws, req) => {
   ws.on('pong', () => { ws.isAlive = true; });
 
   // messages: first expecting a JSON connect message. After connected, binary messages are sent to ssh.
-  ws.on('message', (msg, isBinary) => {
+  ws.on('message', async (msg, isBinary) => {
     if (!alive) return;
     if (!isBinary) {
       const parsed = safeParseJson(msg.toString());
@@ -708,21 +753,39 @@ wss.on('connection', (ws, req) => {
           ws.close();
           return;
         }
-
-        // SSRF Protection: Block private/local network access
-        if (isPrivateOrLocalIP(host)) {
-          logger.warn('SSRF attempt blocked - private/local network access denied', {
-            target_host: host,
-            source_ip: ip,
-            user_email: sessionData.user.email,
-            user_agent: req.headers['user-agent'] || 'unknown',
-            port: port || 22,
-            username: username
-          });
-          
-          ws.send(JSON.stringify({ type: 'error', message: 'Access to local/private network denied' }));
+        // Resolve DNS before validating to prevent DNS rebinding / SSRF
+        let resolvedAddrs;
+        try {
+          resolvedAddrs = await dns.lookup(host, { all: true });
+        } catch (e) {
+          logger.warn('DNS resolution failed for host', { host, error: e.message });
+          ws.send(JSON.stringify({ type: 'error', message: 'DNS resolution failed' }));
           ws.close();
           return;
+        }
+
+        if (!resolvedAddrs || resolvedAddrs.length === 0) {
+          ws.send(JSON.stringify({ type: 'error', message: 'DNS resolution failed' }));
+          ws.close();
+          return;
+        }
+
+        // If any resolved address is private/local, block the request (conservative)
+        for (const a of resolvedAddrs) {
+          if (isPrivateOrLocalIP(a.address)) {
+            logger.warn('SSRF attempt blocked - private/local network access denied', {
+              target_host: host,
+              resolved_address: a.address,
+              source_ip: ip,
+              user_email: sessionData.user && sessionData.user.email,
+              user_agent: req.headers['user-agent'] || 'unknown',
+              port: port || 22,
+              username: username
+            });
+            ws.send(JSON.stringify({ type: 'error', message: 'Access to local/private network denied' }));
+            ws.close();
+            return;
+          }
         }
         
         logger.info('SSH connection attempt', {
@@ -738,8 +801,10 @@ wss.on('connection', (ws, req) => {
         sshClient = new Client();
         ws._sshClient = sshClient;
         const connectionStartTime = Date.now();
+        // Use the first resolved public IP to connect (avoid DNS re-resolution by ssh2)
+        const chosen = resolvedAddrs[0] && resolvedAddrs[0].address ? resolvedAddrs[0].address : host;
         const connectOpts = {
-          host: host,
+          host: chosen,
           port: parseInt(port || '22', 10),
           username: username,
           readyTimeout: 20000,
