@@ -1,16 +1,94 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>KeySocket — Secure Web SSH Client | Terminal in Browser</title>
-    <meta name="description" content="KeySocket is a secure web-based SSH client with Google OAuth authentication. Access your servers from any browser with xterm.js terminal, private key support, and real-time connection feedback." />
-    <meta name="keywords" content="web ssh, ssh client, terminal, browser, secure, google oauth, xterm.js, remote access, keysocket" />
-    <meta name="author" content="KeySocket" />
-    <meta property="og:title" content="KeySocket — Secure Web SSH Client" />
-    <meta property="og:description" content="Access your servers securely from any browser with KeySocket's web-based SSH client featuring Google OAuth authentication and private key support." />
-    <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://keysocket.eu/" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KeySocket Console - Web SSH Terminal | Secure Remote Access</title>
+    
+    <!-- SEO Meta Tags -->
+    <meta name="description" content="Access your remote servers securely through KeySocket's web-based SSH terminal. Features OAuth2 authentication, real-time terminal emulation, and enterprise-grade security.">
+    <meta name="keywords" content="web terminal, ssh console, remote access, terminal emulator, web ssh, secure shell, server management, cloud terminal, xterm.js">
+    <meta name="author" content="KeySocket.eu">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="language" content="English">
+    <meta name="geo.region" content="EU">
+    <meta name="geo.placename" content="European Union">
+    
+    <!-- Open Graph Meta Tags -->
+    <meta property="og:title" content="KeySocket Console - Web SSH Terminal">
+    <meta property="og:description" content="Secure web-based SSH terminal for remote server access with enterprise-grade security.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://keysocket.eu/console">
+    <meta property="og:image" content="https://keysocket.eu/images/og-image.png">
+    <meta property="og:site_name" content="KeySocket">
+    <meta property="og:locale" content="en_US">
+    
+    <!-- Twitter Card Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="KeySocket Console - Web SSH Terminal">
+    <meta name="twitter:description" content="Secure web-based SSH terminal for remote server access.">
+    <meta name="twitter:image" content="https://keysocket.eu/images/twitter-card.png">
+    <meta name="twitter:creator" content="@keysocket">
+    
+    <!-- Technical SEO -->
+    <link rel="canonical" href="https://keysocket.eu/console">
+    <link rel="alternate" hreflang="en" href="https://keysocket.eu/console">
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+    
+    <!-- Security Headers -->
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta http-equiv="X-Frame-Options" content="DENY">
+    <meta http-equiv="X-XSS-Protection" content="1; mode=block">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    
+    <!-- Preconnect for Performance -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+    
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="css/style.css?v=7.1">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Structured Data -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "KeySocket Console",
+        "description": "Secure web-based SSH terminal for remote server access",
+        "url": "https://keysocket.eu/console",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "Web Browser",
+        "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "EUR"
+        },
+        "author": {
+            "@type": "Organization",
+            "name": "KeySocket.eu",
+            "url": "https://keysocket.eu"
+        },
+        "isPartOf": {
+            "@type": "WebSite",
+            "name": "KeySocket",
+            "url": "https://keysocket.eu"
+        },
+        "featureList": [
+            "Web-based Terminal",
+            "SSH Client",
+            "OAuth2 Authentication",
+            "Real-time Connection",
+            "Session Management",
+            "Security Features"
+        ]
+    }
+    </script>
     <meta property="og:image" content="https://keysocket.eu/og-image.png" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="KeySocket — Secure Web SSH Client" />
@@ -37,6 +115,10 @@
 
         <main>
             <section class="connect">
+                <div class="security-disclaimer">
+                    <i class="fas fa-shield-alt"></i>
+                    <span>KeySocket acts as a blind tunnel. Your private keys and passwords are processed in RAM only and are never written to disk or logs.</span>
+                </div>
                 <form id="connect-form">
                     <label>Host <input name="host" placeholder="example.com or 192.0.2.1" required></label>
                     <label>Port <input name="port" type="number" value="22"></label>
@@ -48,8 +130,8 @@
                         </select>
                     </label>
                     <label id="password-label">Password <input name="password" type="password"></label>
-                    <label id="key-label" style="display:none">Private key <input id="keyfile" type="file" accept="*/*"></label>
-                    <label id="passphrase-label" style="display:none">Key passphrase (optional) <input name="passphrase" type="password" autocomplete="off"></label>
+                    <label id="key-label" class="label-hidden">Private key <input id="keyfile" type="file" accept="*/*"></label>
+                    <label id="passphrase-label" class="label-hidden">Key passphrase (optional) <input name="passphrase" type="password" autocomplete="off"></label>
                     <div class="actions">
                         <button id="connect-btn" type="submit">Connect</button>
                         <button id="disconnect-btn" type="button" disabled>Disconnect</button>
@@ -61,7 +143,7 @@
 
             <section class="terminal-area">
                 <div class="terminal-controls">
-                    <span style="font-size:11px;color:var(--muted);flex:1">Drag corner to resize, or use fullscreen</span>
+                    <span class="terminal-controls-text">Drag corner to resize, or use fullscreen</span>
                     <button id="app-management-toggle" type="button" class="app-management-btn">Settings</button>
                     <button id="fullscreen-btn" type="button" title="Toggle fullscreen">⛶ Fullscreen</button>
                 </div>
@@ -107,8 +189,8 @@
     </div>
 
     <!-- Turnstile overlay shown on initial site enter until verified -->
-    <div id="turnstile-overlay" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);z-index:9999;">
-        <div style="background:#fff;padding:24px;border-radius:8px;max-width:420px;width:90%;text-align:center;">
+    <div id="turnstile-overlay">
+        <div class="turnstile-content">
             <h3>Verify you're human</h3>
             <p>Please complete the verification to continue using KeySocket.</p>
             <div id="turnstile-widget"></div>

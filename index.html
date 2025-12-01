@@ -3,30 +3,115 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KeySocket - Web SSH Gateway</title>
+    <title>KeySocket - Secure Web SSH Gateway | Access Your Servers Anywhere</title>
+    
+    <!-- SEO Meta Tags -->
+    <meta name="description" content="KeySocket is a secure web-based SSH gateway that lets you access your remote servers from anywhere. Features OAuth2 authentication, end-to-end encryption, and a modern terminal interface.">
+    <meta name="keywords" content="web ssh, ssh gateway, remote access, terminal, server management, secure shell, web terminal, ssh client, cloud terminal, remote administration">
+    <meta name="author" content="KeySocket.eu">
+    <meta name="robots" content="index, follow">
+    <meta name="language" content="English">
+    <meta name="geo.region" content="EU">
+    <meta name="geo.placename" content="European Union">
+    
+    <!-- Open Graph Meta Tags -->
+    <meta property="og:title" content="KeySocket - Secure Web SSH Gateway">
+    <meta property="og:description" content="Access your servers securely from anywhere with KeySocket's modern web-based SSH terminal.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://keysocket.eu">
+    <meta property="og:image" content="https://keysocket.eu/images/og-image.png">
+    <meta property="og:site_name" content="KeySocket">
+    <meta property="og:locale" content="en_US">
+    
+    <!-- Twitter Card Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="KeySocket - Secure Web SSH Gateway">
+    <meta name="twitter:description" content="Access your servers securely from anywhere with KeySocket's modern web-based SSH terminal.">
+    <meta name="twitter:image" content="https://keysocket.eu/images/twitter-card.png">
+    <meta name="twitter:creator" content="@keysocket">
+    
+    <!-- Technical SEO -->
+    <link rel="canonical" href="https://keysocket.eu">
+    <link rel="alternate" hreflang="en" href="https://keysocket.eu">
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+    
+    <!-- Google Verification -->
+    <meta name="google-site-verification" content="your-google-verification-code-here">
+    
+    <!-- DNS Prefetch for Performance -->
+    <link rel="dns-prefetch" href="//fonts.googleapis.com">
+    <link rel="dns-prefetch" href="//cdnjs.cloudflare.com">
+    <link rel="dns-prefetch" href="//www.google-analytics.com">
+    
+    <!-- Security Headers -->
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta http-equiv="X-Frame-Options" content="DENY">
+    <meta http-equiv="X-XSS-Protection" content="1; mode=block">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    
+    <!-- Preconnect for Performance -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+    
+    <!-- Stylesheets -->
     <link rel="stylesheet" href="css/landing_style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Structured Data -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "KeySocket",
+        "description": "Secure web-based SSH gateway for remote server access",
+        "url": "https://keysocket.eu",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "Web Browser",
+        "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "EUR"
+        },
+        "author": {
+            "@type": "Organization",
+            "name": "KeySocket.eu",
+            "url": "https://keysocket.eu"
+        },
+        "featureList": [
+            "OAuth2 Authentication",
+            "End-to-End Encryption",
+            "Web-based Terminal",
+            "Mobile Friendly",
+            "Session Management",
+            "Rate Limiting"
+        ]
+    }
+    </script>
 </head>
 <body>
     <!-- Navigation -->
     <nav class="navbar">
         <div class="nav-container">
-            <div class="nav-logo">
-                <i class="fas fa-key"></i>
-                <span>KeySocket</span>
-            </div>
-            <ul class="nav-menu">
-                <li><a href="#features">Features</a></li>
-                <li><a href="#how-it-works">How It Works</a></li>
-                <li><a href="#security">Security</a></li>
-            </ul>
-            <div class="nav-right">
-                <div class="dark-mode-toggle" id="dark-mode-toggle">
-                    <i class="fas fa-moon"></i>
-                    <i class="fas fa-sun"></i>
+            <div class="nav-left">
+                <div class="nav-logo">
+                    <img src="img/logo/keysocket-high-resolution-logo-transparent.png" alt="KeySocket Logo" class="logo-image">
                 </div>
+            </div>
+            <div class="nav-right">
+                <ul class="nav-menu">
+                    <li><a href="#features">Features</a></li>
+                    <li><a href="#how-it-works">How It Works</a></li>
+                    <li><a href="#security">Security</a></li>
+                    <li><a href="/privacy">Privacy</a></li>
+                    <li><a href="https://github.com/HereLiesHugo/KeySocket-v2">GitHub</a></li>
+                </ul>
                 <div class="nav-toggle" id="mobile-menu">
+                    <span class="bar"></span>
                     <span class="bar"></span>
                     <span class="bar"></span>
                     <span class="bar"></span>
@@ -186,13 +271,13 @@
         <div class="container">
             <div class="footer-content">
                 <div class="footer-logo">
-                    <i class="fas fa-key"></i>
-                    <span>KeySocket</span>
+                    <img src="img/logo/keysocket-high-resolution-logo-transparent.png" alt="KeySocket Logo" class="footer-logo-image">
                 </div>
                 <div class="footer-text">
-                    <p>&copy; <span id="current-year"></span></span> KeySocket. Secure web-based SSH gateway.</p>
+                    <p>&copy; <span id="current-year"></span> KeySocket. Secure web-based SSH gateway.</p>
                 </div>
                 <div class="footer-links">
+                    <a href="/privacy">Privacy Policy</a>
                     <a href="https://github.com/HereLiesHugo/KeySocket-v2/blob/main/LICENSE">License</a>
                     <a href="https://github.com/HereLiesHugo/KeySocket-v2/blob/main/README.md">Documentation</a>
                 </div>
@@ -200,6 +285,6 @@
         </div>
     </footer>
 
-    <script src="js/landing.js"></script>
-</body>
-</html>
+        <script src="js/landing.js"></script>
+    </body>
+    </html>

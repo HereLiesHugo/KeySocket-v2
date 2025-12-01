@@ -15,6 +15,7 @@ const http = require('http');
 const { Client } = require('ssh2');
 const { URL } = require('url');
 const cookie = require('cookie');
+const dns = require('dns').promises; // ADDED: Required for SSRF fix
 
 // Enhanced logging system
 const logFile = path.join(__dirname, 'server.log');
@@ -24,14 +25,14 @@ function writeLog(level, message, meta = {}) {
   const timestamp = new Date().toISOString();
   const metaStr = Object.keys(meta).length > 0 ? ` | ${JSON.stringify(meta)}` : '';
   const logEntry = `${timestamp} [${level.toUpperCase()}] ${message}${metaStr}\n`;
-  
+
   // Write to file
   try {
     fs.appendFileSync(logFile, logEntry);
   } catch (error) {
     console.error('Failed to write to log file:', error.message);
   }
-  
+
   // Console output with colors
   const colors = {
     reset: '\x1b[0m',
@@ -43,14 +44,14 @@ function writeLog(level, message, meta = {}) {
     magenta: '\x1b[35m',
     cyan: '\x1b[36m'
   };
-  
+
   const levelColors = {
     error: colors.red,
     warn: colors.yellow,
     info: colors.cyan,
     debug: colors.blue
   };
-  
+
   const color = levelColors[level] || colors.reset;
   console.log(`${color}[${level.toUpperCase()}]${colors.reset} ${message}`);
 }
@@ -119,40 +120,40 @@ function parseWebSocketSession(cookieHeader, callback) {
     logger.debug('WebSocket connection without cookie header', { ip: 'unknown' });
     return callback(null, null);
   }
-  
+
   // Check if sessionStore is available
   if (!sessionStore) {
     logger.error('Session store not available for WebSocket authentication');
     return callback(null, null);
   }
-  
+
   try {
     const cookies = cookie.parse(cookieHeader);
     const sessionId = cookies['connect.sid'];
-    
+
     logger.debug('WebSocket session authentication attempt', {
       session_id: sessionId ? sessionId.substring(0, 20) + '...' : 'null',
       cookie_present: !!sessionId
     });
-    
+
     if (!sessionId) {
       logger.debug('No connect.sid found in WebSocket cookies');
       return callback(null, null);
     }
-    
+
     // Remove the 's:' prefix and decode if necessary
     let cleanSessionId = sessionId;
     if (sessionId.startsWith('s:')) {
       cleanSessionId = sessionId.slice(2).split('.')[0];
     }
-    
+
     logger.debug('Processing WebSocket session', {
       original_id: sessionId.substring(0, 20) + '...',
       clean_id: cleanSessionId,
       store_type: typeof sessionStore,
       has_get_method: typeof sessionStore.get
     });
-    
+
     // Get session from store
     sessionStore.get(cleanSessionId, (err, session) => {
       if (err) {
@@ -162,16 +163,16 @@ function parseWebSocketSession(cookieHeader, callback) {
         });
         return callback(err, null);
       }
-      
+
       if (!session) {
         logger.warn('WebSocket session not found in store', {
           session_id: cleanSessionId
         });
         return callback(null, null);
       }
-      
+
       logger.debug('WebSocket session found, checking authentication');
-      
+
       // Check if user is authenticated via Passport
       if (session.passport && session.passport.user) {
         logger.info('WebSocket user authenticated successfully', {
@@ -179,18 +180,18 @@ function parseWebSocketSession(cookieHeader, callback) {
           user_email: session.passport.user.email,
           user_name: session.passport.user.name
         });
-        
+
         return callback(null, {
           authenticated: true,
           user: session.passport.user
         });
       }
-      
+
       logger.warn('WebSocket session exists but user not authenticated', {
         session_id: cleanSessionId,
         has_passport: !!session.passport
       });
-      
+
       return callback(null, null);
     });
   } catch (error) {
@@ -243,31 +244,31 @@ console.log(`[Server] Session store has get method: ${typeof sessionStore.get}`)
 function cleanupExpiredSessions() {
   try {
     logger.info('Starting session cleanup process');
-    
+
     if (!fs.existsSync(sessionsDir)) {
       logger.debug('Sessions directory does not exist, skipping cleanup');
       return;
     }
-    
+
     const files = fs.readdirSync(sessionsDir);
     let cleanedCount = 0;
     let totalSize = 0;
-    
+
     logger.debug(`Found ${files.length} session files to check`);
-    
+
     files.forEach(file => {
       const filePath = path.join(sessionsDir, file);
       try {
         const stats = fs.statSync(filePath);
         const fileAge = Date.now() - stats.mtime.getTime();
         const fileSize = stats.size;
-        
+
         // Remove files older than 24 hours
         if (fileAge > 24 * 60 * 60 * 1000) {
           fs.unlinkSync(filePath);
           cleanedCount++;
           totalSize += fileSize;
-          
+
           logger.debug('Removed expired session file', {
             filename: file,
             age_hours: Math.floor(fileAge / (1000 * 60 * 60)),
@@ -278,7 +279,7 @@ function cleanupExpiredSessions() {
         logger.warn('Error processing session file', { filename: file, error: error.message });
       }
     });
-    
+
     if (cleanedCount > 0) {
       logger.info('Session cleanup completed', {
         cleaned_files: cleanedCount,
@@ -414,11 +415,11 @@ app.get('/health', (req, res) => res.json({ ok: true, env: process.env.NODE_ENV 
 // Sitemap endpoint
 app.get('/sitemap.xml', (req, res) => {
   const sitemapPath = path.join(__dirname, 'sitemap.xml');
-  
+
   // Set headers first
   res.setHeader('Content-Type', 'application/xml; charset=utf-8');
   res.setHeader('Cache-Control', 'public, max-age=3600');
-  
+
   if (fs.existsSync(sitemapPath)) {
     try {
       const xmlContent = fs.readFileSync(sitemapPath, 'utf8');
@@ -427,7 +428,7 @@ app.get('/sitemap.xml', (req, res) => {
       console.error('Error reading sitemap:', e);
     }
   }
-  
+
   // Fallback if file doesn't exist or can't be read
   const fallback = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -538,7 +539,7 @@ const wss = new WebSocketServer({
         done(false, 401, 'Unauthorized: Authentication required');
         return;
       }
-      
+
       console.log(`[WebSocket] Accepted connection from ${info.req.socket.remoteAddress} for user ${sessionData.user.email}`);
       // Store session data on the request for use in connection handler
       info.req.sessionData = sessionData;
@@ -601,7 +602,7 @@ function isPrivateOrLocalIP(host) {
   if (host === 'localhost' || host === '127.0.0.1' || host === '::1') {
     return true;
   }
-  
+
   // Check if it's an IP address
   if (net.isIP(host)) {
     return net.isIP(host) && (
@@ -627,7 +628,7 @@ function isPrivateOrLocalIP(host) {
       )
     );
   }
-  
+
   // For domain names, we could do DNS resolution here
   // For now, we'll block suspicious domain patterns
   const suspiciousPatterns = [
@@ -641,7 +642,7 @@ function isPrivateOrLocalIP(host) {
     'switch',
     'firewall'
   ];
-  
+
   return suspiciousPatterns.some(pattern => host.toLowerCase().includes(pattern));
 }
 
@@ -650,14 +651,14 @@ wss.on('connection', (ws, req) => {
   const ip = req.socket.remoteAddress || 'unknown';
   const userAgent = req.headers['user-agent'] || 'unknown';
   const sessionData = req.sessionData; // Session data from verifyClient
-  
+
   logger.info('New WebSocket connection attempt', {
     ip: ip,
     user_agent: userAgent,
     authenticated: !!(sessionData && sessionData.authenticated),
     user_email: sessionData?.user?.email || 'anonymous'
   });
-  
+
   if (!sessionData || !sessionData.authenticated) {
     logger.warn('Rejecting unauthenticated WebSocket connection', {
       ip: ip,
@@ -666,13 +667,13 @@ wss.on('connection', (ws, req) => {
     ws.close(1008, 'Authentication required');
     return;
   }
-  
+
   logger.info('WebSocket connection authenticated successfully', {
     ip: ip,
     user_email: sessionData.user.email,
     user_name: sessionData.user.name
   });
-  
+
   console.log(`[WebSocket] New SSH connection from ${ip} for user ${sessionData.user.email} (${sessionData.user.name})`);
 
   const concurrent = incrIp(ip);
@@ -695,7 +696,8 @@ wss.on('connection', (ws, req) => {
   ws.on('pong', () => { ws.isAlive = true; });
 
   // messages: first expecting a JSON connect message. After connected, binary messages are sent to ssh.
-  ws.on('message', (msg, isBinary) => {
+  // SECURITY FIX: async added to allow await dns.lookup
+  ws.on('message', async (msg, isBinary) => {
     if (!alive) return;
     if (!isBinary) {
       const parsed = safeParseJson(msg.toString());
@@ -709,24 +711,48 @@ wss.on('connection', (ws, req) => {
           return;
         }
 
-        // SSRF Protection: Block private/local network access
-        if (isPrivateOrLocalIP(host)) {
+        // --- SECURITY FIX: SSRF PROTECTION START ---
+        // Resolve hostname to IP first, then validate the IP, then connect to the IP.
+        // This prevents DNS Rebinding attacks (Time-of-Check Time-of-Use).
+        
+        let targetAddress = host;
+        
+        // 1. If it looks like a domain, resolve it to an IP first
+        if (!net.isIP(host)) {
+            try {
+                logger.debug('Resolving DNS for host', { host });
+                const result = await dns.lookup(host);
+                targetAddress = result.address;
+                logger.debug('DNS resolved', { host, address: targetAddress });
+            } catch (err) {
+                logger.warn('DNS resolution failed', { host, error: err.message });
+                ws.send(JSON.stringify({ type: 'error', message: 'DNS resolution failed' }));
+                ws.close();
+                return;
+            }
+        }
+
+        // 2. Validate the RESOLVED IP, not the hostname
+        if (isPrivateOrLocalIP(targetAddress)) {
           logger.warn('SSRF attempt blocked - private/local network access denied', {
-            target_host: host,
+            original_host: host,
+            resolved_ip: targetAddress, 
             source_ip: ip,
             user_email: sessionData.user.email,
             user_agent: req.headers['user-agent'] || 'unknown',
             port: port || 22,
             username: username
           });
-          
+
           ws.send(JSON.stringify({ type: 'error', message: 'Access to local/private network denied' }));
           ws.close();
           return;
         }
-        
+        // --- SECURITY FIX: SSRF PROTECTION END ---
+
         logger.info('SSH connection attempt', {
           target_host: host,
+          target_ip: targetAddress, // Log the actual IP
           target_port: port || 22,
           username: username,
           auth_type: auth,
@@ -739,7 +765,7 @@ wss.on('connection', (ws, req) => {
         ws._sshClient = sshClient;
         const connectionStartTime = Date.now();
         const connectOpts = {
-          host: host,
+          host: targetAddress, // 3. IMPORTANT: Connect to the VALIDATED IP, not the hostname
           port: parseInt(port || '22', 10),
           username: username,
           readyTimeout: 20000,
@@ -794,7 +820,7 @@ wss.on('connection', (ws, req) => {
             error_code: err.code,
             connection_time_ms: Date.now() - connectionStartTime
           });
-          
+
           ws.send(JSON.stringify({ type: 'error', message: err.message }));
           ws.close();
         });
@@ -861,15 +887,15 @@ server.listen(PORT, HOST, () => {
     node_version: process.version,
     session_store_type: 'FileStore',
     websocket_path: '/ssh',
-    ssrf_protection: 'enabled',
+    ssrf_protection: 'enabled (DNS Resolution + IP Validation)',
     session_cleanup: 'enabled (24h TTL)',
     log_level: logLevel
   });
-  
+
   console.log(`\n🚀 KeySocket Server listening on ${HOST}:${PORT}`);
   console.log(`📝 Logs: ${logFile}`);
   console.log(`🔐 Authentication: Google OAuth + Turnstile`);
-  console.log(`🛡️  SSRF Protection: Enabled`);
+  console.log(`🛡️  SSRF Protection: Enabled (DNS Resolution + IP Validation)`);
   console.log(`💾 Session Storage: FileStore (${sessionsDir})`);
   console.log(`🗑️  Session Cleanup: Every 6 hours (24h TTL)\n`);
 });

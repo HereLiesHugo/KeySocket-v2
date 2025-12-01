@@ -26,22 +26,86 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Smooth scrolling for navigation links
+    // Enhanced smooth scrolling for navigation links
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
         anchor.addEventListener('click', function(e) {
             e.preventDefault();
-            const target = document.querySelector(this.getAttribute('href'));
+            const targetId = this.getAttribute('href');
+            const target = document.querySelector(targetId);
+            
             if (target) {
-                const offset = 80; // Account for fixed navbar
-                const targetPosition = target.offsetTop - offset;
+                // Close mobile menu if open
+                mobileMenu.classList.remove('active');
+                navMenu.classList.remove('active');
                 
-                window.scrollTo({
-                    top: targetPosition,
-                    behavior: 'smooth'
-                });
+                // Calculate offset with navbar height
+                const navbar = document.querySelector('.navbar');
+                const navbarHeight = navbar ? navbar.offsetHeight : 70;
+                const targetPosition = target.offsetTop - navbarHeight - 20; // Extra 20px padding
+                
+                // Smooth scroll with fallback for browsers that don't support smooth behavior
+                if ('scrollBehavior' in document.documentElement.style) {
+                    window.scrollTo({
+                        top: targetPosition,
+                        behavior: 'smooth'
+                    });
+                } else {
+                    // Fallback for older browsers
+                    const startPosition = window.pageYOffset;
+                    const distance = targetPosition - startPosition;
+                    const duration = 800;
+                    let start = null;
+                    
+                    function animation(currentTime) {
+                        if (start === null) start = currentTime;
+                        const timeElapsed = currentTime - start;
+                        const run = ease(timeElapsed, startPosition, distance, duration);
+                        window.scrollTo(0, run);
+                        if (timeElapsed < duration) requestAnimationFrame(animation);
+                    }
+                    
+                    function ease(t, b, c, d) {
+                        t /= d / 2;
+                        if (t < 1) return c / 2 * t * t + b;
+                        t--;
+                        return -c / 2 * (t * (t - 2) - 1) + b;
+                    }
+                    
+                    requestAnimationFrame(animation);
+                }
+                
+                // Update active nav state
+                updateActiveNavLink(targetId);
             }
         });
     });
+    
+    // Update active navigation link based on scroll position
+    function updateActiveNavLink(targetId) {
+        document.querySelectorAll('.nav-menu a').forEach(link => {
+            link.classList.remove('active');
+            if (link.getAttribute('href') === targetId) {
+                link.classList.add('active');
+            }
+        });
+    }
+    
+    // Scroll spy - update active nav link on scroll
+    window.addEventListener('scroll', debounce(function() {
+        const sections = document.querySelectorAll('section[id]');
+        const navbarHeight = document.querySelector('.navbar')?.offsetHeight || 70;
+        const scrollPosition = window.pageYOffset + navbarHeight + 100;
+        
+        sections.forEach(section => {
+            const sectionTop = section.offsetTop;
+            const sectionHeight = section.offsetHeight;
+            const sectionId = section.getAttribute('id');
+            
+            if (scrollPosition >= sectionTop && scrollPosition < sectionTop + sectionHeight) {
+                updateActiveNavLink(`#${sectionId}`);
+            }
+        });
+    }, 100));
 
     // Navbar scroll effect
     let lastScrollTop = 0;
@@ -65,6 +129,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Initialize terminal demo
     initializeTerminal();
+    
+    // Initialize terminal typing animation
+    initializeTerminalTypingAnimation();
     
     // Initialize contact form
     initializeContactForm();
@@ -489,32 +556,17 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-// Typing Animation for Hero Terminal
-document.addEventListener('DOMContentLoaded', function() {
-    const typingElements = document.querySelectorAll('.typing');
+// Terminal Typing Animation for Hero Section
+function initializeTerminalTypingAnimation() {
+    const command = document.querySelector('.command');
     
-    typingElements.forEach(element => {
-        const text = element.textContent;
-        element.textContent = '';
-        let index = 0;
-        
-        function type() {
-            if (index < text.length) {
-                element.textContent += text.charAt(index);
-                index++;
-                setTimeout(type, 100);
-            } else {
-                setTimeout(() => {
-                    element.textContent = '';
-                    index = 0;
-                    type();
-                }, 2000);
-            }
-        }
-        
-        type();
-    });
-});
+    if (!command) return;
+    
+    // Add typing class to trigger CSS animation after page load
+    setTimeout(() => {
+        command.classList.add('typing');
+    }, 1000);
+}
 
 // Performance optimization - Debounce scroll events
 function debounce(func, wait) {
@@ -574,6 +626,7 @@ document.addEventListener('keydown', function(e) {
 window.KeySocketLanding = {
     showNotification,
     initializeTerminal,
+    initializeTerminalTypingAnimation,
     initializeContactForm,
     initializeScrollAnimations
 };
