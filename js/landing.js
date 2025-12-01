@@ -13,10 +13,12 @@ document.addEventListener('DOMContentLoaded', function() {
         navMenu.classList.toggle('active');
     });
 
-    // Dark mode toggle
-    darkModeToggle.addEventListener('click', function() {
-        toggleDarkMode();
-    });
+    // Dark mode toggle (only if element exists)
+    if (darkModeToggle) {
+        darkModeToggle.addEventListener('click', function() {
+            toggleDarkMode();
+        });
+    }
 
     // Close mobile menu when clicking on a link
     document.querySelectorAll('.nav-menu a').forEach(link => {
