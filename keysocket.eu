@@ -2,17 +2,20 @@
 
 # Map for websocket Connection header
 map $http_upgrade $connection_upgrade {
-    default     upgrade;
-    ''          close;
+    default      upgrade;
+    ''           close;
 }
 
-# Bot filter
+# Bot filter - FIXED
+# I have removed Googlebot, Bingbot, etc. from this list.
+# Since you use Cloudflare, it is safer to rely on their WAF for bot protection.
 map $http_user_agent $is_bad_bot {
     default 0;
-    ~*(Googlebot|Bingbot|Baiduspider|YandexBot|Slurp|DuckDuckBot|Sogou|360Spider|facebot|AhrefsBot|SEMrushBot) 1;
+    # Add specific bad actors here if needed, e.g.:
+    # ~*(BadScraper123|MaliciousBot) 1;
 }
 
-# Redirect HTTP → HTTPS
+# Redirect HTTP -> HTTPS
 server {
     listen 80;
     listen [::]:80;
@@ -32,8 +35,9 @@ server {
 
 # HTTPS server
 server {
-    listen 443 ssl http2;
-    listen [::]:443 ssl http2;
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
     server_name keysocket.eu www.keysocket.eu;
 
     # SSL (managed by Certbot)
@@ -72,7 +76,8 @@ server {
         frame-src 'self' https://challenges.cloudflare.com;
     " always;
 
-    add_header X-Robots-Tag "index, follow, all" always;
+    # Global SEO Header - ALLOWS indexing
+    add_header X-Robots-Tag "index, follow" always;
 
     # Limits
     client_max_body_size 50M;
@@ -84,7 +89,7 @@ server {
     access_log /var/log/nginx/keysocket.access.log;
     error_log /var/log/nginx/keysocket.error.log;
 
-    # Block bad bots
+    # Block bad bots (Only if map returns 1)
     if ($is_bad_bot) {
         return 444;
     }
@@ -94,7 +99,7 @@ server {
         return 301 /$1;
     }
 
-    # /console → console.html
+    # /console -> console.html
     location = /console {
         proxy_pass http://127.0.0.1:3000/console.html;
         proxy_http_version 1.1;
@@ -105,7 +110,7 @@ server {
         proxy_hide_header Content-Security-Policy;
     }
 
-    # /index → index.html
+    # /index -> index.html
     location = /index {
         proxy_pass http://127.0.0.1:3000/index.html;
         proxy_http_version 1.1;
@@ -116,7 +121,7 @@ server {
         proxy_hide_header Content-Security-Policy;
     }
 
-    # /privacy → pages/privacy.html
+    # /privacy -> pages/privacy.html
     location = /privacy {
         proxy_pass http://127.0.0.1:3000/pages/privacy.html;
         proxy_http_version 1.1;
@@ -171,6 +176,7 @@ server {
         access_log off;
         add_header Cache-Control "public, max-age=3600, s-maxage=86400" always;
         add_header Content-Type "application/xml; charset=utf-8" always;
+        add_header X-Robots-Tag "index, follow" always;
         try_files $uri =404;
     }
 
@@ -185,7 +191,7 @@ server {
 
     # Static OG image
     location = /og-image.png {
-        root /var/www/keysocket;
+        root /var/www/keysocket.eu; # FIXED path
         add_header Cache-Control "public, max-age=86400, s-maxage=604800";
         try_files $uri =404;
     }
