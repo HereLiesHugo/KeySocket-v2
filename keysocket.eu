@@ -161,24 +161,30 @@ server {
 
     # SEO: Serve sitemap.xml as static file with proper headers and caching
     location = /sitemap.xml {
-        root /var/www/keysocket.eu;  # Update this to your actual project path
+        root /var/www/keysocket.eu;
         add_header Cache-Control "public, max-age=3600, s-maxage=86400" always;
         add_header Content-Type "application/xml; charset=utf-8" always;
         access_log off;
         
         # Security: Allow search engines to access sitemap
         add_header X-Robots-Tag "noindex" always;
+        
+        # Ensure proper XML serving
+        try_files $uri =404;
     }
 
     # SEO: Serve robots.txt as static file with proper headers and caching
     location = /robots.txt {
-        root /var/www/keysocket.eu;  # Update this to your actual project path
+        root /var/www/keysocket.eu;
         add_header Cache-Control "public, max-age=3600, s-maxage=86400" always;
         add_header Content-Type "text/plain; charset=utf-8" always;
         access_log off;
         
         # Security: Allow search engines to access robots.txt
         add_header X-Robots-Tag "noindex" always;
+        
+        # Ensure proper file serving
+        try_files $uri =404;
     }
 
     # SEO: Optional OG image placeholder (create this file if you want custom social images)
