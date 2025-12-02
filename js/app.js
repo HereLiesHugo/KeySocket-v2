@@ -714,12 +714,14 @@
         socket.binaryType = 'arraybuffer';
 
         socket.addEventListener('open', () => {
+            // FIXED: Added token to the payload body to satisfy backend requirements
             const payload = {
                 type: 'connect',
                 host: form.host.value,
                 port: form.port.value || 22,
                 username: form.username.value,
-                auth: authSelect ? authSelect.value : 'password'
+                auth: authSelect ? authSelect.value : 'password',
+                token: ksTurnstileToken // <--- ADDED THIS LINE
             };
             if (authSelect && authSelect.value === 'password') {
                 payload.password = form.password.value;
