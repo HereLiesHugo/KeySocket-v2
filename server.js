@@ -616,6 +616,7 @@ app.post('/turnstile-verify', (req, res) => {
             
             // Send response immediately, save session in background to avoid blocking
             const responseData = JSON.stringify({ ok: true, token: serverToken, ttl: TURNSTILE_TOKEN_TTL_MS });
+            console.log(`[Turnstile] Sending response: ${responseData}`);
             res.setHeader('Content-Type', 'application/json');
             res.setHeader('Content-Length', Buffer.byteLength(responseData));
             res.status(200).end(responseData);

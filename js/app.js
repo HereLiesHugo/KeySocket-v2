@@ -865,8 +865,20 @@
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ token })
-        }).then(r => r.json()).then(j => {
-            console.debug('turnstile verify response', j);
+        }).then(r => {
+            console.debug('turnstile verify raw response status:', r.status);
+            console.debug('turnstile verify raw response headers:', [...r.headers.entries()]);
+            return r.text();
+        }).then(text => {
+            console.debug('turnstile verify raw response text:', text);
+            let j;
+            try {
+                j = JSON.parse(text);
+            } catch (e) {
+                console.error('Failed to parse JSON response:', text, e);
+                throw new Error(`Invalid JSON response: ${text.substring(0, 100)}`);
+            }
+            console.debug('turnstile verify parsed response', j);
             if (j && j.ok && j.token) {
                 // store the server-issued one-time token temporarily
                 ksTurnstileToken = j.token;
