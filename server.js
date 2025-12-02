@@ -609,25 +609,27 @@ app.post('/turnstile-verify', (req, res) => {
             const serverToken = require('crypto').randomBytes(24).toString('hex');
             const expires = Date.now() + TURNSTILE_TOKEN_TTL_MS;
             
-            // Store token in session instead of global map
+            // Store token in session and send response immediately
             req.session.turnstileToken = serverToken;
             req.session.turnstileTokenExpires = expires;
             req.session.turnstileVerifiedIP = req.socket.remoteAddress || '';
             
-            // Save session immediately
+            // Send response immediately, save session in background to avoid blocking
+            const responseData = JSON.stringify({ ok: true, token: serverToken, ttl: TURNSTILE_TOKEN_TTL_MS });
+            res.setHeader('Content-Type', 'application/json');
+            res.setHeader('Content-Length', Buffer.byteLength(responseData));
+            res.status(200).end(responseData);
+            
+            // Save session asynchronously
             req.session.save((saveErr) => {
               if (saveErr) {
-                console.error('[Turnstile] Failed to save session', saveErr);
-                return res.status(500).json({ ok: false, message: 'session save failed' });
+                logger.error('[Turnstile] Failed to save session', saveErr);
+              } else {
+                logger.info('Turnstile verification successful, token stored in session', {
+                  user_email: req.session.passport?.user?.email || 'anonymous',
+                  ip: req.socket.remoteAddress || 'unknown'
+                });
               }
-              
-              logger.info('Turnstile verification successful, token stored in session', {
-                user_email: req.session.passport?.user?.email || 'anonymous',
-                ip: req.socket.remoteAddress || 'unknown'
-              });
-              
-              // Send response without explicit Content-Length to let Express handle it
-              return res.status(200).json({ ok: true, token: serverToken, ttl: TURNSTILE_TOKEN_TTL_MS });
             });
           }
           console.warn(`[Turnstile] Verification failed: ${JSON.stringify(parsed)}`);
