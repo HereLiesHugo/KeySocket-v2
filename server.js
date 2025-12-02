@@ -113,14 +113,17 @@ app.use(helmet({
   crossOriginResourcePolicy: false
 }));
 
-// CSP fallback in case Nginx misconfiguration (matches Nginx config)
+// CSP fallback in case Nginx misconfiguration (matches Nginx config + additional hashes)
 app.use((req, res, next) => {
   if (!res.getHeader('Content-Security-Policy')) {
     res.setHeader("Content-Security-Policy", 
       "default-src 'self'; " +
-      "script-src 'self' 'unsafe-eval' " +
+      "script-src 'self' 'unsafe-eval' 'unsafe-inline' " +
         "'sha256-51AbVm95/bXyZWOhL4XUEH7oO//14QSsMzS9dJ4HAHI=' " +
         "'sha256-YjP9NejlrkKr07NlpI0X4jV+JyxjWifNyQbWA/sqfu8=' " +
+        "'sha256-gj6IB38jtvdWbaqYbrth6Tfn/uGW8gNDaQX5n47a/rY=' " +
+        "'sha256-b5ZZ7GeGNY3rnCsgVzgKDt3i/OU504qSTwaIOSqu0xA=' " +
+        "'sha256-zJ0i5jxdSrH1FnKjFTtqndCZv4sOOinr2V0FYy/qUYM=' " +
         "https://challenges.cloudflare.com " +
         "https://cdn.jsdelivr.net " +
         "https://static.cloudflareinsights.com; " +
@@ -136,7 +139,9 @@ app.use((req, res, next) => {
         "https://cloudflareinsights.com " +
         "https://challenges.cloudflare.com " +
         "https://static.cloudflareinsights.com; " +
-      "frame-src 'self' https://challenges.cloudflare.com;"
+      "frame-src 'self' https://challenges.cloudflare.com; " +
+      "worker-src 'self' blob:; " +
+      "child-src 'self' blob:;"
     );
   }
   next();
@@ -530,8 +535,14 @@ app.post('/turnstile-verify', (req, res) => {
   console.log(`[Turnstile] Verifying token for IP ${req.socket.remoteAddress || 'unknown'}`);
   const req2 = https.request(options, (resp) => {
     let data = '';
-    resp.on('data', (chunk) => { data += chunk.toString(); });
+    resp.on('data', (chunk) => { 
+      data += chunk.toString(); 
+      console.log(`[Turnstile] Received chunk of ${chunk.length} bytes, total: ${data.length}`);
+    });
     resp.on('end', () => {
+      console.log(`[Turnstile] Complete response received, length: ${data.length}, status: ${resp.statusCode}`);
+      console.log(`[Turnstile] Response headers:`, resp.headers);
+      
       try {
           const parsed = JSON.parse(data);
           console.log(`[Turnstile] Cloudflare response: success=${parsed.success}, error-codes=${JSON.stringify(parsed['error-codes'] || [])}`);
@@ -563,7 +574,10 @@ app.post('/turnstile-verify', (req, res) => {
                 ip: req.socket.remoteAddress || 'unknown'
               });
               
-              return res.json({ ok: true, token: serverToken, ttl: TURNSTILE_TOKEN_TTL_MS });
+              // Ensure response headers are properly set
+              res.setHeader('Content-Type', 'application/json');
+              res.setHeader('Content-Length', Buffer.byteLength(JSON.stringify({ ok: true, token: serverToken, ttl: TURNSTILE_TOKEN_TTL_MS })));
+              return res.status(200).json({ ok: true, token: serverToken, ttl: TURNSTILE_TOKEN_TTL_MS });
             });
           }
           console.warn(`[Turnstile] Verification failed: ${JSON.stringify(parsed)}`);
@@ -577,8 +591,20 @@ app.post('/turnstile-verify', (req, res) => {
 
   req2.on('error', (err) => { 
     console.error('[Turnstile] Request error:', err.message); 
-    res.status(500).json({ ok: false, message: 'verification error' }); 
+    if (!res.headersSent) {
+      res.status(500).json({ ok: false, message: 'verification error' }); 
+    }
   });
+
+  req2.on('timeout', () => {
+    console.error('[Turnstile] Request timeout');
+    req2.destroy();
+    if (!res.headersSent) {
+      res.status(500).json({ ok: false, message: 'verification timeout' }); 
+    }
+  });
+
+  req2.setTimeout(10000); // 10 second timeout
   req2.write(postData);
   req2.end();
 });

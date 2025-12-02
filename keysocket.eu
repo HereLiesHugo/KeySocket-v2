@@ -50,12 +50,15 @@ server {
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
     add_header X-Robots-Tag "index, follow" always;
 
-    # Content Security Policy (Preserved from your original config)
+    # Content Security Policy (Updated with additional hashes for Turnstile)
     add_header Content-Security-Policy "
         default-src 'self';
-        script-src 'self' 'unsafe-eval'
+        script-src 'self' 'unsafe-eval' 'unsafe-inline'
             'sha256-51AbVm95/bXyZWOhL4XUEH7oO//14QSsMzS9dJ4HAHI='
             'sha256-YjP9NejlrkKr07NlpI0X4jV+JyxjWifNyQbWA/sqfu8='
+            'sha256-gj6IB38jtvdWbaqYbrth6Tfn/uGW8gNDaQX5n47a/rY='
+            'sha256-b5ZZ7GeGNY3rnCsgVzgKDt3i/OU504qSTwaIOSqu0xA='
+            'sha256-zJ0i5jxdSrH1FnKjFTtqndCZv4sOOinr2V0FYy/qUYM='
             https://challenges.cloudflare.com
             https://cdn.jsdelivr.net
             https://static.cloudflareinsights.com;
@@ -72,6 +75,8 @@ server {
             https://challenges.cloudflare.com
             https://static.cloudflareinsights.com;
         frame-src 'self' https://challenges.cloudflare.com;
+        worker-src 'self' blob:;
+        child-src 'self' blob:;
     " always;
 
     # --- LOGGING ---
