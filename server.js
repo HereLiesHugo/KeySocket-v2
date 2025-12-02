@@ -584,7 +584,12 @@ app.post('/turnstile-verify', (req, res) => {
     hostname: 'challenges.cloudflare.com',
     path: '/turnstile/v0/siteverify',
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(postData) }
+    headers: { 
+      'Content-Type': 'application/x-www-form-urlencoded', 
+      'Content-Length': Buffer.byteLength(postData),
+      'User-Agent': 'KeySocket-Server/1.0', // FIXED: Added User-Agent to avoid blocking
+      'Accept': 'application/json'          // FIXED: Explicitly accept JSON
+    }
   };
 
   console.log(`[Turnstile] Verifying token for IP ${req.socket.remoteAddress || 'unknown'}`);
@@ -635,11 +640,16 @@ app.post('/turnstile-verify', (req, res) => {
                 });
               }
             });
+          } else {
+            console.warn(`[Turnstile] Verification failed: ${JSON.stringify(parsed)}`);
+            return res.status(400).json({ ok: false, message: 'verification failed', details: parsed });
           }
-          console.warn(`[Turnstile] Verification failed: ${JSON.stringify(parsed)}`);
-          return res.status(400).json({ ok: false, message: 'verification failed', details: parsed });
       } catch (e) {
         console.error(`[Turnstile] Failed to parse Cloudflare response: ${e.message}`);
+        // Log truncated response if it's HTML to help debugging
+        if (data.trim().startsWith('<')) {
+            console.error(`[Turnstile] Received HTML instead of JSON. Preview: ${data.substring(0, 150)}...`);
+        }
         return res.status(500).json({ ok: false, message: 'invalid response from turnstile' });
       }
     });
