@@ -568,6 +568,9 @@ app.get('/health', (req, res) => res.json({ ok: true, env: process.env.NODE_ENV 
 
 // Turnstile verification endpoint - accepts a client token and verifies with Cloudflare
 app.post('/turnstile-verify', (req, res) => {
+  console.log('[Turnstile] Received verification request');
+  console.log('[Turnstile] Request headers:', req.headers);
+  console.log('[Turnstile] Request body:', req.body);
   const token = (req.body && req.body.token) || '';
   if (!token) return res.status(400).json({ ok: false, message: 'missing token' });
   if (!TURNSTILE_SECRET) {
