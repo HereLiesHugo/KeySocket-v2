@@ -547,41 +547,89 @@ function safeParseJson(message) {
   try { return JSON.parse(message); } catch (e) { return null; }
 }
 
-// IP validation function to prevent SSRF attacks
-function isPrivateOrLocalIP(host) {
-  // Check for localhost variations
-  if (host === 'localhost' || host === '127.0.0.1' || host === '::1') {
+// Comprehensive IP validation function to prevent SSRF attacks
+function isPrivateOrLocalIP(input) {
+  // Handle various IP encoding formats
+  let ip = input;
+  
+  // Convert decimal IP (e.g., 2130706433) to standard format
+  if (/^\d+$/.test(ip)) {
+    try {
+      const decimal = parseInt(ip, 10);
+      if (decimal >= 0 && decimal <= 0xFFFFFFFF) {
+        ip = [
+          (decimal >>> 24) & 0xFF,
+          (decimal >>> 16) & 0xFF,
+          (decimal >>> 8) & 0xFF,
+          decimal & 0xFF
+        ].join('.');
+      }
+    } catch (e) {
+      // Invalid decimal format, treat as suspicious
+      return true;
+    }
+  }
+  
+  // Convert octal IP (e.g., 0177.0000.0000.0001) to decimal
+  if (ip.startsWith('0') && /^[0-7.]+$/.test(ip)) {
+    try {
+      ip = ip.split('.').map(octet => parseInt(octet, 8)).join('.');
+    } catch (e) {
+      return true; // Invalid octal format
+    }
+  }
+  
+  // Convert hex IP (e.g., 0x7F.0x00.0x00.0x01) to decimal
+  if (ip.toLowerCase().includes('0x')) {
+    try {
+      ip = ip.split('.').map(hexet => {
+        if (hexet.startsWith('0x')) {
+          return parseInt(hexet, 16);
+        }
+        return hexet;
+      }).join('.');
+    } catch (e) {
+      return true; // Invalid hex format
+    }
+  }
+  
+  // Check for basic localhost variations
+  if (ip === 'localhost' || ip === '127.0.0.1' || ip === '::1') {
     return true;
   }
 
   // Check if it's an IP address
-  if (net.isIP(host)) {
-    return net.isIP(host) && (
-      net.isIPv4(host) && (
+  if (net.isIP(ip)) {
+    return (
+      net.isIPv4(ip) && (
         // IPv4 private ranges
-        host.startsWith('10.') ||
-        host.startsWith('192.168.') ||
-        (host.startsWith('172.') && {
+        ip.startsWith('10.') ||
+        ip.startsWith('192.168.') ||
+        (ip.startsWith('172.') && {
           '16': true, '17': true, '18': true, '19': true,
           '20': true, '21': true, '22': true, '23': true,
           '24': true, '25': true, '26': true, '27': true,
           '28': true, '29': true, '30': true, '31': true
-        }[host.split('.')[1]]) ||
-        host.startsWith('169.254.') || // Link-local
-        host.startsWith('127.') // Loopback
+        }[ip.split('.')[1]]) ||
+        ip.startsWith('169.254.') || // Link-local
+        ip.startsWith('127.') || // Loopback
+        ip === '0.0.0.0' // Unspecified
       ) ||
-      net.isIPv6(host) && (
-        host.startsWith('fe80::') || // Link-local
-        host.startsWith('fc') || // Private
-        host.startsWith('fd') || // Private
-        host.startsWith('::1') || // Loopback
-        host.startsWith('::ffff:127') // IPv4-mapped localhost
+      net.isIPv6(ip) && (
+        ip.startsWith('fe80::') || // Link-local
+        ip.startsWith('fc') || // Private
+        ip.startsWith('fd') || // Private
+        ip === '::1' || // Loopback
+        ip.startsWith('::ffff:127') || // IPv4-mapped localhost
+        ip.startsWith('::ffff:192.168.') || // IPv4-mapped private
+        ip.startsWith('::ffff:10.') || // IPv4-mapped private
+        ip.startsWith('::ffff:172.') || // IPv4-mapped private
+        ip === '::' // Unspecified
       )
     );
   }
 
-  // For domain names, we could do DNS resolution here
-  // For now, we'll block suspicious domain patterns
+  // For domain names, check for suspicious patterns
   const suspiciousPatterns = [
     'localhost',
     'local',
@@ -591,10 +639,70 @@ function isPrivateOrLocalIP(host) {
     'gateway',
     'router',
     'switch',
-    'firewall'
+    'firewall',
+    'metadata', // AWS metadata service
+    '169.254.169.254', // AWS metadata
+    'metadata.google.internal', // GCP metadata
+    'instance-data', // AWS instance metadata
+    '169.254.169.254', // AWS metadata endpoint
+    'metadata.azure.com', // Azure metadata
+    '169.254.169.254' // Azure metadata endpoint
   ];
 
-  return suspiciousPatterns.some(pattern => host.toLowerCase().includes(pattern));
+  return suspiciousPatterns.some(pattern => 
+    ip.toLowerCase().includes(pattern.toLowerCase())
+  );
+}
+
+// Enhanced host validation with DNS rebinding protection
+async function validateHost(hostname, originalHost, sourceIP, userEmail) {
+  try {
+    // First, check if the hostname itself is suspicious
+    if (isPrivateOrLocalIP(hostname)) {
+      logger.warn('SSRF attempt blocked - suspicious hostname', {
+        original_host: originalHost,
+        hostname: hostname,
+        source_ip: sourceIP,
+        user_email: userEmail
+      });
+      throw new Error('Access to local/private network denied');
+    }
+    
+    // Resolve hostname to IP addresses
+    const results = await dns.lookup(hostname, { all: true });
+    
+    if (!results || results.length === 0) {
+      throw new Error('DNS resolution failed');
+    }
+    
+    // Check all resolved IP addresses
+    for (const result of results) {
+      const resolvedIP = result.address;
+      
+      // Validate each resolved IP - if ANY are private, block the connection
+      if (isPrivateOrLocalIP(resolvedIP)) {
+        logger.warn('SSRF attempt blocked - DNS resolves to private IP', {
+          original_host: originalHost,
+          hostname: hostname,
+          resolved_ip: resolvedIP,
+          source_ip: sourceIP,
+          user_email: userEmail
+        });
+        throw new Error('Access to local/private network denied');
+      }
+    }
+    
+    // Return the first resolved IP for connection
+    return results[0].address;
+  } catch (error) {
+    logger.error('Host validation failed', {
+      hostname: hostname,
+      error: error.message,
+      source_ip: sourceIP,
+      user_email: userEmail
+    });
+    throw error;
+  }
 }
 
 // Each ws connection may bootstrap an SSH client
@@ -662,44 +770,31 @@ wss.on('connection', (ws, req) => {
           return;
         }
 
-        // --- SECURITY FIX: SSRF PROTECTION START ---
-        // Resolve hostname to IP first, then validate the IP, then connect to the IP.
-        // This prevents DNS Rebinding attacks (Time-of-Check Time-of-Use).
+        // --- ENHANCED SSRF PROTECTION START ---
+        // Use comprehensive host validation with DNS rebinding protection
+        let targetAddress;
         
-        let targetAddress = host;
-        
-        // 1. If it looks like a domain, resolve it to an IP first
-        if (!net.isIP(host)) {
-            try {
-                logger.debug('Resolving DNS for host', { host });
-                const result = await dns.lookup(host);
-                targetAddress = result.address;
-                logger.debug('DNS resolved', { host, address: targetAddress });
-            } catch (err) {
-                logger.warn('DNS resolution failed', { host, error: err.message });
-                ws.send(JSON.stringify({ type: 'error', message: 'DNS resolution failed' }));
-                ws.close();
-                return;
-            }
-        }
-
-        // 2. Validate the RESOLVED IP, not the hostname
-        if (isPrivateOrLocalIP(targetAddress)) {
-          logger.warn('SSRF attempt blocked - private/local network access denied', {
+        try {
+          targetAddress = await validateHost(host, host, ip, sessionData.user.email);
+          logger.debug('Host validation passed', {
             original_host: host,
-            resolved_ip: targetAddress, 
+            validated_address: targetAddress
+          });
+        } catch (error) {
+          logger.warn('SSRF protection blocked connection', {
+            original_host: host,
+            error: error.message,
             source_ip: ip,
             user_email: sessionData.user.email,
-            user_agent: req.headers['user-agent'] || 'unknown',
             port: port || 22,
             username: username
           });
 
-          ws.send(JSON.stringify({ type: 'error', message: 'Access to local/private network denied' }));
+          ws.send(JSON.stringify({ type: 'error', message: error.message }));
           ws.close();
           return;
         }
-        // --- SECURITY FIX: SSRF PROTECTION END ---
+        // --- ENHANCED SSRF PROTECTION END ---
 
         logger.info('SSH connection attempt', {
           target_host: host,
