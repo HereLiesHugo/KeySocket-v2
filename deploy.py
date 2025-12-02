@@ -86,9 +86,13 @@ try:
     sleep(1)
     
     # 3. BACKEND RELOAD
-    log_action(f'Reloading {APP_NAME} through pm2...')
-    check_call(f'pm2 reload {APP_NAME} --update-env', shell=True)
-    success("Reload command sent.")
+    log_action(f'Reloading {APP_NAME} through pm2 (ecosystem)...')
+    # Use ecosystem file to ensure cwd and env are explicit
+    check_call('pm2 startOrReload ecosystem.config.js --update-env', shell=True)
+    success("pm2 startOrReload executed.")
+    # Persist current process list (so pm2 resurrect works after reboot)
+    check_call('pm2 save', shell=True)
+    success('pm2 process list saved.')
     
     log_info('Waiting for backend to stabilize (3s)...')
     sleep(3) 

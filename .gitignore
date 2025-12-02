@@ -18,3 +18,9 @@ out
 build
 sessions/
 server.log
+pycache/
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+.ipynb_checkpoints
