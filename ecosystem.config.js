@@ -3,7 +3,7 @@ module.exports = {
     {
       name: 'keysocket',
       script: 'server.js',
-      cwd: '/home/coder/projects/github/KeySocket-v2',
+      cwd: '/var/www/keysocket.eu',
       // Preload dotenv so the app picks up `.env` from the cwd automatically
       node_args: ['-r', 'dotenv/config'],
       instances: 1,
