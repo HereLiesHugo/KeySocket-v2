@@ -698,28 +698,28 @@
         try { term.clear(); } catch (e) {}
         try { term.focus(); } catch (e) {}
 
-        // If not yet authenticated via Google OAuth, enforce a fresh Turnstile token
-        if (!ksIsAuthenticated) {
-            const now = Date.now();
-            if (!ksTurnstileToken || (ksTurnstileTTL && (now > (ksTurnstileVerifiedAt + ksTurnstileTTL - 2000)))) {
-                // token missing or expired (with 2s safety margin) -> re-run Turnstile
-                reRunTurnstile();
-                try { term.writeln('\r\n[INFO] Turnstile token missing or expired; please complete verification.'); } catch (e) {}
-                showConnectionBanner('Turnstile verification required before connecting.', 'info');
-                return;
-            }
+        // FIXED: Always require a token, even if authenticated.
+        const now = Date.now();
+        if (!ksTurnstileToken || (ksTurnstileTTL && (now > (ksTurnstileVerifiedAt + ksTurnstileTTL - 2000)))) {
+            // token missing or expired (with 2s safety margin) -> re-run Turnstile
+            reRunTurnstile();
+            try { term.writeln('\r\n[INFO] Turnstile token missing or expired; please complete verification.'); } catch (e) {}
+            showConnectionBanner('Turnstile verification required before connecting.', 'info');
+            return;
         }
 
         socket = new WebSocket(wsUrl());
         socket.binaryType = 'arraybuffer';
 
         socket.addEventListener('open', () => {
+            // FIXED: Added token to the payload body to satisfy backend requirements
             const payload = {
                 type: 'connect',
                 host: form.host.value,
                 port: form.port.value || 22,
                 username: form.username.value,
-                auth: authSelect ? authSelect.value : 'password'
+                auth: authSelect ? authSelect.value : 'password',
+                token: ksTurnstileToken // <--- ADDED THIS LINE
             };
             if (authSelect && authSelect.value === 'password') {
                 payload.password = form.password.value;
@@ -829,140 +829,123 @@
     if (disconnectBtn) disconnectBtn.addEventListener('click', disconnect);
 
     // Check authentication status on page load
-        function checkAuthStatus() {
-            // Small delay to ensure session is established
-            setTimeout(() => {
-                fetch('/auth/status', {
-                    method: 'GET',
-                    credentials: 'same-origin'
-                }).then(r => r.json()).then(data => {
-                    console.log('Auth status check:', data);
-                    ksIsAuthenticated = !!(data && data.authenticated);
-                    if (ksIsAuthenticated) {
-                        const ov = document.getElementById('turnstile-overlay');
-                        if (ov) ov.style.display = 'none';
-                        if (connectBtn) connectBtn.disabled = false;
-                        // prevent Cloudflare script from re-initializing Turnstile when already authenticated
-                        try { window.ksInitTurnstile = function () {}; } catch (e) {}
-                        console.log('User authenticated, skipping Turnstile');
-                    } else {
-                        // User not authenticated, show Turnstile
-                        initTurnstile();
-                    }
-                }).catch(err => {
-                    console.log('Auth check failed, showing Turnstile', err);
+    function checkAuthStatus() {
+        // Small delay to ensure session is established
+        setTimeout(() => {
+            fetch('/auth/status', {
+                method: 'GET',
+                credentials: 'same-origin'
+            }).then(r => r.json()).then(data => {
+                console.log('Auth status check:', data);
+                ksIsAuthenticated = !!(data && data.authenticated);
+                if (ksIsAuthenticated) {
+                    // FIXED: Do NOT skip Turnstile. We need the token for the WebSocket.
+                    // Just hide the overlay but ensure initialization runs.
+                    const ov = document.getElementById('turnstile-overlay');
+                    if (ov) ov.style.display = 'none';
+                    if (connectBtn) connectBtn.disabled = false;
+                    
+                    // Always initialize turnstile to ensure we can get a token
+                    initTurnstile(); 
+                    console.log('User authenticated, Turnstile ready for connection verification');
+                } else {
+                    // User not authenticated, show Turnstile overlay
                     initTurnstile();
-                });
-            }, 100); // 100ms delay
-        }
+                }
+            }).catch(err => {
+                console.log('Auth check failed, showing Turnstile', err);
+                initTurnstile();
+            });
+        }, 100); // 100ms delay
+    }
 
     // Turnstile handling on site enter
     function onTurnstileToken(token) {
         if (!token) return;
-        if (ksIsAuthenticated) return;
-        // send token to server for verification and redirect to OAuth
+        // FIXED: Allowed even if authenticated to refresh token
+        // send token to server for verification
         fetch('/turnstile-verify', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ token })
-        }).then(r => r.json()).then(j => {
-            console.debug('turnstile verify response', j);
+        }).then(r => {
+            console.debug('turnstile verify raw response status:', r.status);
+            return r.text();
+        }).then(text => {
+            let j;
+            try { j = JSON.parse(text); } catch (e) { throw new Error('Invalid JSON'); }
+            
             if (j && j.ok && j.token) {
                 // store the server-issued one-time token temporarily
                 ksTurnstileToken = j.token;
                 ksTurnstileTTL = parseInt(j.ttl || '30000', 10) || 30000;
                 ksTurnstileVerifiedAt = Date.now();
 
-                // Redirect to Google OAuth instead of enabling connect button
-                window.location.href = '/auth/google';
+                // FIXED: Check if already authenticated. If so, don't redirect.
+                if (ksIsAuthenticated) {
+                     const ov = document.getElementById('turnstile-overlay');
+                     if (ov) ov.style.display = 'none';
+                     if (connectBtn) connectBtn.disabled = false;
+                     // Optional: Show a small "Ready" indicator if needed
+                } else {
+                     // Not authenticated? Then redirect to Google OAuth
+                     window.location.href = '/auth/google';
+                }
 
                 // clean up widget to avoid duplicate renders later
                 try {
                     const widgetEl = document.getElementById('turnstile-widget');
-                    if (widgetEl) { widgetEl.innerHTML = ''; delete widgetEl.dataset.turnstileRendered; }
+                    // Only clear if we are hiding the overlay, otherwise user might want to see it?
+                    // Actually, if we got a token, we are good.
+                    if (widgetEl && !ksIsAuthenticated) { widgetEl.innerHTML = ''; delete widgetEl.dataset.turnstileRendered; }
                     ksTurnstileWidgetId = null;
                     ksTurnstileRendered = false;
                 } catch (e) {}
             } else {
-                // leave overlay visible and let user try again; show details
                 console.warn('Turnstile verify failed', j);
-                try { console.warn('Turnstile verify details:', JSON.stringify(j)); } catch (e) {}
             }
         }).catch(err => console.error('turnstile verify error', err));
     }
 
     function initTurnstile() {
-        if (ksIsAuthenticated) return;
+        // FIXED: Removed "if (ksIsAuthenticated) return;" to allow token generation for logged-in users
         try {
-            // disable connect until verified
-            if (connectBtn) connectBtn.disabled = true;
+            if (connectBtn && !ksIsAuthenticated) connectBtn.disabled = true;
             const widgetEl = document.getElementById('turnstile-widget');
-            console.debug('initTurnstile:', { turnstile: !!window.turnstile, widgetEl });
-            if (!widgetEl) {
-                console.error('Turnstile widget container not found');
-                if (connectBtn) connectBtn.disabled = false;
-                return;
-            }
+            if (!widgetEl) return;
 
             // Prevent double-rendering
             if (widgetEl.dataset && widgetEl.dataset.turnstileRendered === '1') {
-                console.info('Turnstile already rendered in container; skipping render');
-                ksTurnstileRendered = true;
                 return;
             }
 
             if (window.turnstile) {
                 try {
-                    // clear any placeholder content, then render once
                     widgetEl.innerHTML = '';
                     ksTurnstileWidgetId = window.turnstile.render('#turnstile-widget', { sitekey: '0x4AAAAAACDdgapByiL54XqC', callback: onTurnstileToken });
                     ksTurnstileRendered = true;
                     if (widgetEl.dataset) widgetEl.dataset.turnstileRendered = '1';
-                    console.info('Turnstile render invoked, widgetId=', ksTurnstileWidgetId);
                 } catch (e) {
                     console.error('turnstile render error', e);
-                    ksTurnstileWidgetId = null;
-                    // show user-friendly error and retry button
-                    widgetEl.innerHTML = `<div style="color:#b00">Failed to load verification widget.<br/><button id="turnstile-retry">Retry</button></div>`;
-                    const btn = document.getElementById('turnstile-retry');
-                    if (btn) btn.addEventListener('click', () => { widgetEl.innerHTML = ''; initTurnstile(); });
-                    if (connectBtn) connectBtn.disabled = false;
                 }
             } else {
-                // turnstile library not loaded yet — attempt to load it dynamically and show helpful hint
-                console.warn('Turnstile library not ready');
-                widgetEl.innerHTML = `<div style="color:#b00">Verification library not loaded.<br/><div id="turnstile-load-status">Attempting to load...</div><button id="turnstile-retry">Retry</button></div>`;
-                const statusEl = document.getElementById('turnstile-load-status');
-                const btn2 = document.getElementById('turnstile-retry');
+                // Load dynamically
+                widgetEl.innerHTML = `<div style="color:#b00">Loading verification...</div>`;
                 const loadScript = () => {
                     try {
-                        if (statusEl) statusEl.textContent = 'Loading Turnstile library...';
-                        // create script element to load the library (will respect CSP)
                         const s = document.createElement('script');
                         s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?onload=ksInitTurnstile&render=explicit';
-                        s.async = true;
-                        s.defer = true;
-                        s.onload = () => {
-                            if (statusEl) statusEl.textContent = 'Loaded, initializing...';
-                            try { if (window.ksInitTurnstile) window.ksInitTurnstile(); } catch (e) {}
-                        };
-                        s.onerror = (ev) => { if (statusEl) statusEl.textContent = 'Failed to load library. Check console and network. CSP may be blocking external scripts.'; console.error('Turnstile script load error', ev); };
+                        s.async = true; s.defer = true;
                         document.head.appendChild(s);
-                        // give a timeout if nothing happens
-                        setTimeout(() => { if (!window.turnstile && statusEl && statusEl.textContent.indexOf('Failed') === -1) statusEl.textContent = 'Still loading — check network/CSP and retry.'; }, 4000);
-                    } catch (e) { console.error('dynamic load failed', e); if (statusEl) statusEl.textContent = 'Dynamic loader failed'; }
+                    } catch (e) {}
                 };
-                if (btn2) btn2.addEventListener('click', () => { widgetEl.innerHTML = ''; loadScript(); });
-                // try once automatically
                 loadScript();
-                if (connectBtn) connectBtn.disabled = false;
             }
         } catch (e) { console.error('initTurnstile', e); }
     }
 
     function reRunTurnstile() {
-        if (ksIsAuthenticated) return;
-        // show the overlay and reset or re-render the widget to prompt the user
+        // FIXED: Allow re-run even if authenticated if token expired
         const ov = document.getElementById('turnstile-overlay');
         if (ov) ov.style.display = 'flex';
         try {
