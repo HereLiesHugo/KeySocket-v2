@@ -1,3 +1,0 @@
-UX:
-    - Session Reconnect
-        - 30s Grace Period (keeps ssh connection alive for 30s)

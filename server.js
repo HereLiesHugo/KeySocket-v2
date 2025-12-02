@@ -15,6 +15,7 @@ const http = require('http');
 const { Client } = require('ssh2');
 const { URL } = require('url');
 const cookie = require('cookie');
+const cookieParser = require('cookie-parser');
 const dns = require('dns').promises; // ADDED: Required for SSRF fix
 
 // Enhanced logging system
@@ -102,6 +103,7 @@ passport.use(new GoogleStrategy({
 const HOST = process.env.HOST || '0.0.0.0';
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const USE_TLS = process.env.USE_TLS === 'true';
+const REQUIRE_TLS = process.env.REQUIRE_TLS === 'true'; // Fail startup if TLS required but not available
 const TLS_KEY = process.env.TLS_KEY || '/etc/letsencrypt/live/keysocket.eu/privkey.pem';
 const TLS_CERT = process.env.TLS_CERT || '/etc/letsencrypt/live/keysocket.eu/fullchain.pem';
 
@@ -110,6 +112,24 @@ app.use(helmet({
   contentSecurityPolicy: false, // Disabled: We handle CSP in Nginx
   crossOriginResourcePolicy: false
 }));
+
+// CSP fallback in case Nginx misconfiguration
+app.use((req, res, next) => {
+  if (!res.getHeader('Content-Security-Policy')) {
+    res.setHeader("Content-Security-Policy", 
+      "default-src 'self'; " +
+      "script-src 'self' 'unsafe-inline'; " +
+      "style-src 'self' 'unsafe-inline'; " +
+      "img-src 'self' data: https:; " +
+      "connect-src 'self' wss: ws:; " +
+      "font-src 'self'; " +
+      "object-src 'none'; " +
+      "media-src 'self'; " +
+      "frame-src 'none';"
+    );
+  }
+  next();
+});
 
 app.use(express.json({ limit: '200kb' }));
 app.use(express.urlencoded({ extended: false }));
@@ -129,22 +149,31 @@ function parseWebSocketSession(cookieHeader, callback) {
 
   try {
     const cookies = cookie.parse(cookieHeader);
-    const sessionId = cookies['connect.sid'];
+    const rawSessionId = cookies['connect.sid'];
 
     logger.debug('WebSocket session authentication attempt', {
-      session_id: sessionId ? sessionId.substring(0, 20) + '...' : 'null',
-      cookie_present: !!sessionId
+      session_id: rawSessionId ? rawSessionId.substring(0, 20) + '...' : 'null',
+      cookie_present: !!rawSessionId
     });
 
-    if (!sessionId) {
+    if (!rawSessionId) {
       logger.debug('No connect.sid found in WebSocket cookies');
       return callback(null, null);
     }
 
-    // Remove the 's:' prefix and decode if necessary
+    // Verify the signed cookie signature
+    const sessionId = cookieParser.signedCookie(rawSessionId, process.env.SESSION_SECRET);
+    if (!sessionId) {
+      logger.warn('WebSocket session signature verification failed', {
+        raw_session_id: rawSessionId.substring(0, 20) + '...'
+      });
+      return callback(null, null);
+    }
+
+    // Remove the 's:' prefix (FileStore stores the full signed ID)
     let cleanSessionId = sessionId;
     if (sessionId.startsWith('s:')) {
-      cleanSessionId = sessionId.slice(2).split('.')[0];
+      cleanSessionId = sessionId.slice(2);
     }
 
     logger.debug('Processing WebSocket session', {
@@ -183,7 +212,8 @@ function parseWebSocketSession(cookieHeader, callback) {
 
         return callback(null, {
           authenticated: true,
-          user: session.passport.user
+          user: session.passport.user,
+          session: session // Include session object for Turnstile token verification
         });
       }
 
@@ -226,10 +256,10 @@ const sessionConfig = {
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: process.env.NODE_ENV === 'production', // HTTPS only in production
-    httpOnly: true, // Prevent XSS attacks
-    maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    sameSite: 'lax' // Allow cross-origin requests
+    secure: true,
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000,
+    sameSite: 'none'
   }
 };
 
@@ -300,6 +330,32 @@ cleanupExpiredSessions();
 // Run periodic cleanup every 6 hours
 setInterval(cleanupExpiredSessions, 6 * 60 * 60 * 1000);
 
+// Clean up expired Turnstile tokens from active sessions
+function cleanupExpiredTurnstileTokens() {
+  try {
+    let cleanedCount = 0;
+    
+    // Iterate through all active WebSocket connections and clean up expired tokens
+    wss.clients.forEach((ws) => {
+      if (ws._turnstileVerified && ws._turnstileToken) {
+        // We can't directly access the session here, but we can mark expired connections
+        // The session cleanup will handle removing expired tokens
+        ws._turnstileVerified = false;
+        ws._turnstileToken = null;
+      }
+    });
+    
+    logger.debug('Turnstile token cleanup completed', {
+      cleaned_connections: cleanedCount
+    });
+  } catch (error) {
+    logger.error('Error during Turnstile token cleanup', { error: error.message });
+  }
+}
+
+// Run Turnstile token cleanup every 5 minutes
+setInterval(cleanupExpiredTurnstileTokens, 5 * 60 * 1000);
+
 app.use(passport.initialize());
 app.use(passport.session());
 
@@ -319,8 +375,35 @@ app.get('/auth/google',
 app.get('/auth/google/callback',
   passport.authenticate('google', { failureRedirect: '/console?auth=failure' }),
   (req, res) => {
-    // Successful authentication, redirect to console page with success indicator
-    res.redirect('/console?auth=success');
+    // Regenerate session to prevent session fixation
+    req.session.regenerate((err) => {
+      if (err) {
+        logger.error('Session regeneration failed during OAuth callback', {
+          error: err.message,
+          user_email: req.user?.email
+        });
+        return res.redirect('/console?auth=session_error');
+      }
+      
+      // Re-attach the user to the new session
+      req.login(req.user, (loginErr) => {
+        if (loginErr) {
+          logger.error('Failed to re-attach user to regenerated session', {
+            error: loginErr.message,
+            user_email: req.user?.email
+          });
+          return res.redirect('/console?auth=login_error');
+        }
+        
+        logger.info('Session regenerated successfully after OAuth login', {
+          user_email: req.user.email,
+          user_id: req.user.id
+        });
+        
+        // Successful authentication, redirect to console page with success indicator
+        res.redirect('/console?auth=success');
+      });
+    });
   });
 
 // Logout route
@@ -442,11 +525,35 @@ app.post('/turnstile-verify', (req, res) => {
           const parsed = JSON.parse(data);
           console.log(`[Turnstile] Cloudflare response: success=${parsed.success}, error-codes=${JSON.stringify(parsed['error-codes'] || [])}`);
           if (parsed && parsed.success) {
-            // generate a server-side one-time token and store that (do NOT return the Cloudflare token)
+            // Check if user has a session
+            if (!req.session) {
+              console.warn('[Turnstile] No session available for token storage');
+              return res.status(500).json({ ok: false, message: 'session required' });
+            }
+            
+            // generate a server-side one-time token and store in session
             const serverToken = require('crypto').randomBytes(24).toString('hex');
-            storeVerifiedToken(serverToken, req.socket.remoteAddress || '');
-            console.log(`[Turnstile] Verification successful, issued server token`);
-            return res.json({ ok: true, token: serverToken, ttl: TURNSTILE_TOKEN_TTL_MS });
+            const expires = Date.now() + TURNSTILE_TOKEN_TTL_MS;
+            
+            // Store token in session instead of global map
+            req.session.turnstileToken = serverToken;
+            req.session.turnstileTokenExpires = expires;
+            req.session.turnstileVerifiedIP = req.socket.remoteAddress || '';
+            
+            // Save session immediately
+            req.session.save((saveErr) => {
+              if (saveErr) {
+                console.error('[Turnstile] Failed to save session', saveErr);
+                return res.status(500).json({ ok: false, message: 'session save failed' });
+              }
+              
+              logger.info('Turnstile verification successful, token stored in session', {
+                user_email: req.session.passport?.user?.email || 'anonymous',
+                ip: req.socket.remoteAddress || 'unknown'
+              });
+              
+              return res.json({ ok: true, token: serverToken, ttl: TURNSTILE_TOKEN_TTL_MS });
+            });
           }
           console.warn(`[Turnstile] Verification failed: ${JSON.stringify(parsed)}`);
           return res.status(400).json({ ok: false, message: 'verification failed', details: parsed });
@@ -471,10 +578,37 @@ if (USE_TLS && fs.existsSync(TLS_KEY) && fs.existsSync(TLS_CERT)) {
   const key = fs.readFileSync(TLS_KEY);
   const cert = fs.readFileSync(TLS_CERT);
   server = https.createServer({ key, cert }, app);
-  console.log('Starting HTTPS server');
+  logger.info('Starting HTTPS server with TLS certificates');
+} else if (USE_TLS) {
+  // TLS requested but certificates not found
+  if (REQUIRE_TLS) {
+    logger.error('TLS required but certificate files not found', {
+      tls_key: TLS_KEY,
+      tls_cert: TLS_CERT,
+      key_exists: fs.existsSync(TLS_KEY),
+      cert_exists: fs.existsSync(TLS_CERT)
+    });
+    console.error('FATAL: REQUIRE_TLS=true but TLS certificates not found. Exiting.');
+    process.exit(1);
+  } else {
+    logger.warn('USE_TLS=true set but certificate files not found; falling back to HTTP', {
+      tls_key: TLS_KEY,
+      tls_cert: TLS_CERT,
+      key_exists: fs.existsSync(TLS_KEY),
+      cert_exists: fs.existsSync(TLS_CERT)
+    });
+    server = http.createServer(app);
+  }
 } else {
-  server = http.createServer(app);
-  if (USE_TLS) console.warn('USE_TLS=true set but certificate files not found; starting HTTP instead');
+  // HTTP explicitly requested
+  if (REQUIRE_TLS) {
+    logger.error('REQUIRE_TLS=true but USE_TLS=false. TLS enforcement misconfiguration.');
+    console.error('FATAL: REQUIRE_TLS=true but USE_TLS=false. Exiting.');
+    process.exit(1);
+  } else {
+    logger.info('Starting HTTP server (TLS disabled)');
+    server = http.createServer(app);
+  }
 }
 
 // WebSocket server for /ssh with authentication
@@ -503,33 +637,13 @@ const wss = new WebSocketServer({
 const CONCURRENT_PER_IP = parseInt(process.env.CONCURRENT_PER_IP || '5', 10);
 const ipSessions = new Map();
 
+// SSH brute-force protection
+const MAX_SSH_ATTEMPTS_PER_USER = parseInt(process.env.MAX_SSH_ATTEMPTS_PER_USER || '5', 10);
+const sshAttempts = new Map(); // userId -> { count: number, lastAttempt: timestamp }
+
 // Cloudflare Turnstile config
 const TURNSTILE_SECRET = process.env.TURNSTILE_SECRET || '';
 const TURNSTILE_TOKEN_TTL_MS = parseInt(process.env.TURNSTILE_TOKEN_TTL_MS || String(30 * 1000), 10);
-
-// one-time verified tokens (keyed by the turnstile response token)
-const verifiedTokens = new Map(); // token -> { ip, expires }
-
-function storeVerifiedToken(token, ip) {
-  const expires = Date.now() + TURNSTILE_TOKEN_TTL_MS;
-  verifiedTokens.set(token, { ip, expires });
-}
-
-function consumeVerifiedToken(token, ip) {
-  const info = verifiedTokens.get(token);
-  if (!info) return false;
-  // If stored with an IP, ensure match (optional)
-  if (info.ip && ip && info.ip !== ip) return false;
-  if (info.expires < Date.now()) { verifiedTokens.delete(token); return false; }
-  verifiedTokens.delete(token);
-  return true;
-}
-
-// cleanup expired tokens periodically
-setInterval(() => {
-  const now = Date.now();
-  for (const [t, info] of verifiedTokens.entries()) if (info.expires < now) verifiedTokens.delete(t);
-}, 5000);
 
 function incrIp(ip) {
   const n = (ipSessions.get(ip) || 0) + 1;
@@ -545,6 +659,40 @@ function decrIp(ip) {
 
 function safeParseJson(message) {
   try { return JSON.parse(message); } catch (e) { return null; }
+}
+
+// SSH brute-force protection functions
+function checkSshAttempts(userId) {
+  const attempts = sshAttempts.get(userId) || { count: 0, lastAttempt: 0 };
+  
+  // Reset counter if last attempt was more than 15 minutes ago
+  const now = Date.now();
+  if (now - attempts.lastAttempt > 15 * 60 * 1000) {
+    attempts.count = 0;
+  }
+  
+  if (attempts.count >= MAX_SSH_ATTEMPTS_PER_USER) {
+    return false; // Block attempt
+  }
+  
+  return true; // Allow attempt
+}
+
+function incrementSshAttempts(userId) {
+  const attempts = sshAttempts.get(userId) || { count: 0, lastAttempt: 0 };
+  attempts.count++;
+  attempts.lastAttempt = Date.now();
+  sshAttempts.set(userId, attempts);
+  
+  // Clean up old entries periodically
+  if (Math.random() < 0.1) { // 10% chance to clean up
+    const cutoff = Date.now() - 15 * 60 * 1000;
+    for (const [uid, data] of sshAttempts.entries()) {
+      if (data.lastAttempt < cutoff) {
+        sshAttempts.delete(uid);
+      }
+    }
+  }
 }
 
 // Comprehensive IP validation function to prevent SSRF attacks
@@ -629,29 +777,7 @@ function isPrivateOrLocalIP(input) {
     );
   }
 
-  // For domain names, check for suspicious patterns
-  const suspiciousPatterns = [
-    'localhost',
-    'local',
-    'internal',
-    'admin',
-    'management',
-    'gateway',
-    'router',
-    'switch',
-    'firewall',
-    'metadata', // AWS metadata service
-    '169.254.169.254', // AWS metadata
-    'metadata.google.internal', // GCP metadata
-    'instance-data', // AWS instance metadata
-    '169.254.169.254', // AWS metadata endpoint
-    'metadata.azure.com', // Azure metadata
-    '169.254.169.254' // Azure metadata endpoint
-  ];
-
-  return suspiciousPatterns.some(pattern => 
-    ip.toLowerCase().includes(pattern.toLowerCase())
-  );
+  return false;
 }
 
 // Enhanced host validation with DNS rebinding protection
@@ -668,15 +794,126 @@ async function validateHost(hostname, originalHost, sourceIP, userEmail) {
       throw new Error('Access to local/private network denied');
     }
     
-    // Resolve hostname to IP addresses
-    const results = await dns.lookup(hostname, { all: true });
+    // Tighten hostname blocking with exact patterns
+    const blockedPatterns = [
+      /^\.?localhost$/,          // localhost or .localhost
+      /\.local$/,                 // .local TLD
+      /^\.?internal$/,           // internal or .internal
+      /^\.?private$/,            // private or .private
+      /^169\.254\.169\.254$/,   // AWS/GCP metadata endpoint (exact IP)
+      /^\[?fd[0-9a-fA-F:]+\]?$/, // IPv6 ULA (starts with fd)
+      /^\[?fc[0-9a-fA-F:]+\]?$/  // IPv6 ULA (starts with fc)
+    ];
+
+    // Block known metadata domains (case-insensitive)
+    const blockedDomains = [
+      'metadata.google.internal',
+      'metadata.azure.com',
+      'instance-data.ec2.internal',
+      'instance-data.amazonaws.com'
+    ];
+
+    const lowerHost = hostname.toLowerCase();
     
-    if (!results || results.length === 0) {
-      throw new Error('DNS resolution failed');
+    // Check blocked patterns (exact or suffix matches)
+    if (blockedPatterns.some(pattern => pattern.test(lowerHost))) {
+      logger.warn('SSRF attempt blocked - blocked hostname pattern', {
+        original_host: originalHost,
+        hostname: hostname,
+        source_ip: sourceIP,
+        user_email: userEmail
+      });
+      throw new Error('Access to local/private network denied');
+    }
+
+    // Check blocked domains (exact or subdomain matches)
+    if (blockedDomains.some(domain => 
+      lowerHost === domain || lowerHost.endsWith('.' + domain)
+    )) {
+      logger.warn('SSRF attempt blocked - blocked metadata domain', {
+        original_host: originalHost,
+        hostname: hostname,
+        source_ip: sourceIP,
+        user_email: userEmail
+      });
+      throw new Error('Access to local/private network denied');
+    }
+
+    // Check for IP addresses that might have slipped through (e.g., in hostnames)
+    const ipMatch = lowerHost.match(/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/);
+    if (ipMatch && isPrivateOrLocalIP(ipMatch[0])) {
+      logger.warn('SSRF attempt blocked - embedded private IP in hostname', {
+        original_host: originalHost,
+        hostname: hostname,
+        embedded_ip: ipMatch[0],
+        source_ip: sourceIP,
+        user_email: userEmail
+      });
+      throw new Error('Access to local/private network denied');
     }
     
-    // Check all resolved IP addresses
-    for (const result of results) {
+    // Enhanced DNS resolution with multiple methods to prevent host file poisoning
+    let lookupResults, resolve4Results, resolve6Results;
+    
+    try {
+      // Method 1: Standard lookup (may respect /etc/hosts)
+      lookupResults = await dns.lookup(hostname, { all: true });
+    } catch (err) {
+      logger.debug('DNS lookup failed', { hostname, error: err.message });
+    }
+    
+    try {
+      // Method 2: Direct DNS resolution (bypasses /etc/hosts)
+      resolve4Results = await dns.resolve4(hostname);
+    } catch (err) {
+      logger.debug('DNS resolve4 failed', { hostname, error: err.message });
+    }
+    
+    try {
+      // Method 3: IPv6 resolution
+      resolve6Results = await dns.resolve6(hostname);
+    } catch (err) {
+      logger.debug('DNS resolve6 failed', { hostname, error: err.message });
+    }
+    
+    // Combine all results from different resolution methods
+    const allResults = [];
+    
+    if (lookupResults && lookupResults.length > 0) {
+      allResults.push(...lookupResults.map(r => ({ address: r.address, source: 'lookup' })));
+    }
+    if (resolve4Results && resolve4Results.length > 0) {
+      allResults.push(...resolve4Results.map(addr => ({ address: addr, source: 'resolve4' })));
+    }
+    if (resolve6Results && resolve6Results.length > 0) {
+      allResults.push(...resolve6Results.map(addr => ({ address: addr, source: 'resolve6' })));
+    }
+    
+    if (allResults.length === 0) {
+      throw new Error('DNS resolution failed - all methods failed');
+    }
+    
+    // Check for consistency between resolution methods
+    const lookupIPs = new Set(lookupResults ? lookupResults.map(r => r.address) : []);
+    const directIPs = new Set([...(resolve4Results || []), ...(resolve6Results || [])]);
+    
+    // If we have both methods and they disagree, that's suspicious
+    if (lookupIPs.size > 0 && directIPs.size > 0) {
+      const intersection = new Set([...lookupIPs].filter(x => directIPs.has(x)));
+      if (intersection.size === 0) {
+        logger.warn('DNS resolution inconsistency detected - possible host file poisoning', {
+          hostname,
+          lookup_ips: Array.from(lookupIPs),
+          direct_ips: Array.from(directIPs),
+          source_ip: sourceIP,
+          user_email: userEmail
+        });
+        throw new Error('DNS resolution inconsistency detected');
+      }
+    }
+    
+    // Check all resolved IP addresses from all methods
+    for (const result of allResults) {
       const resolvedIP = result.address;
       
       // Validate each resolved IP - if ANY are private, block the connection
@@ -685,6 +922,7 @@ async function validateHost(hostname, originalHost, sourceIP, userEmail) {
           original_host: originalHost,
           hostname: hostname,
           resolved_ip: resolvedIP,
+          resolution_source: result.source,
           source_ip: sourceIP,
           user_email: userEmail
         });
@@ -692,8 +930,8 @@ async function validateHost(hostname, originalHost, sourceIP, userEmail) {
       }
     }
     
-    // Return the first resolved IP for connection
-    return results[0].address;
+    // Return the first IP from lookup results (maintains compatibility)
+    return lookupResults && lookupResults.length > 0 ? lookupResults[0].address : allResults[0].address;
   } catch (error) {
     logger.error('Host validation failed', {
       hostname: hostname,
@@ -762,7 +1000,65 @@ wss.on('connection', (ws, req) => {
       const parsed = safeParseJson(msg.toString());
       if (!parsed) return;
       if (parsed.type === 'connect') {
-        const { host, port, username, auth } = parsed;
+        const { host, port, username, auth, token } = parsed;
+        const userId = sessionData.user.id || sessionData.user.email;
+        
+        // Verify Turnstile token from session
+        if (!token) {
+          logger.warn('SSH connection blocked - missing Turnstile token', {
+            user_email: sessionData.user.email,
+            source_ip: ip
+          });
+          ws.send(JSON.stringify({ type: 'error', message: 'Turnstile token required' }));
+          ws.close();
+          return;
+        }
+        
+        // Check session for valid Turnstile token
+        const session = sessionData.session;
+        if (!session || 
+            !session.turnstileToken || 
+            session.turnstileToken !== token ||
+            !session.turnstileTokenExpires ||
+            session.turnstileTokenExpires < Date.now()) {
+          logger.warn('SSH connection blocked - invalid or expired Turnstile token', {
+            user_email: sessionData.user.email,
+            source_ip: ip,
+            token_present: !!token,
+            session_token_present: !!(session && session.turnstileToken),
+            token_match: session && session.turnstileToken === token,
+            expired: session && session.turnstileTokenExpires < Date.now()
+          });
+          ws.send(JSON.stringify({ type: 'error', message: 'Invalid or expired Turnstile token' }));
+          ws.close();
+          return;
+        }
+        
+        // Track this connection's token usage without consuming it immediately
+        // This allows multiple WebSocket connections to use the same token
+        // Token will expire naturally based on TTL
+        ws._turnstileVerified = true;
+        ws._turnstileToken = token;
+        
+        logger.debug('Turnstile token verified for WebSocket connection', {
+          user_email: sessionData.user.email,
+          source_ip: ip,
+          token_expires: new Date(session.turnstileTokenExpires).toISOString()
+        });
+        
+        // Check SSH brute-force protection
+        if (!checkSshAttempts(userId)) {
+          logger.warn('SSH connection blocked - too many attempts', {
+            user_id: userId,
+            user_email: sessionData.user.email,
+            source_ip: ip,
+            max_attempts: MAX_SSH_ATTEMPTS_PER_USER
+          });
+          ws.send(JSON.stringify({ type: 'error', message: 'Too many failed SSH attempts. Please try again later.' }));
+          ws.close();
+          return;
+        }
+        
         // Basic validation
         if (!host || !username) {
           ws.send(JSON.stringify({ type: 'error', message: 'Missing host or username' }));
@@ -822,11 +1118,18 @@ wss.on('connection', (ws, req) => {
         else if (auth === 'key') connectOpts.privateKey = parsed.privateKey || parsed.key;
         if (parsed.passphrase) connectOpts.passphrase = parsed.passphrase;
 
-        // Optional: restrict destinations in production via env
-        const allowed = process.env.ALLOWED_HOSTS; // comma separated
+        // Optional: restrict destinations in production via env (should be IPs/CIDRs)
+        const allowed = process.env.ALLOWED_HOSTS; // comma separated IPs or CIDRs
         if (allowed) {
           const list = allowed.split(',').map(s => s.trim()).filter(Boolean);
-          if (!list.includes(host)) {
+          if (!list.includes(targetAddress)) {
+            logger.warn('SSH connection blocked - destination not in allowed list', {
+              original_host: host,
+              target_ip: targetAddress,
+              allowed_list: list,
+              source_ip: ip,
+              user_email: sessionData.user.email
+            });
             ws.send(JSON.stringify({ type: 'error', message: 'Destination not allowed' }));
             ws.close();
             return;
@@ -856,12 +1159,16 @@ wss.on('connection', (ws, req) => {
         });
 
         sshClient.on('error', (err) => {
+          // Increment brute-force counter on connection error
+          incrementSshAttempts(userId);
+          
           logger.error('SSH connection error', {
             target_host: host,
             target_port: port || 22,
             username: username,
             source_ip: ip,
             user_email: sessionData.user.email,
+            user_id: userId,
             error: err.message,
             error_code: err.code,
             connection_time_ms: Date.now() - connectionStartTime
@@ -902,7 +1209,16 @@ wss.on('connection', (ws, req) => {
 
     // binary message -> forward to ssh input
     if (sshStream) {
-      try { sshStream.write(msg); } catch (e) {}
+      try { 
+        sshStream.write(msg); 
+      } catch (e) {
+        logger.warn('SSH stream write failed', {
+          error: e.message,
+          source_ip: ip,
+          user_email: sessionData.user.email,
+          message_size: msg.length
+        });
+      }
     }
   });
 
@@ -948,31 +1264,72 @@ server.listen(PORT, HOST, () => {
 
 // graceful shutdown: close websockets, end SSH clients, then close HTTP server
 function gracefulShutdown(signal) {
-  console.log(`${signal} received, shutting down gracefully...`);
+  logger.info(`${signal} received, shutting down gracefully...`);
+  
   try {
     // stop accepting new connections
-    server.close(() => { console.log('HTTP server closed'); });
-  } catch (e) { console.warn('error closing server', e); }
+    server.close(() => { 
+      logger.info('HTTP server closed'); 
+    });
+  } catch (e) { 
+    logger.warn('error closing server', { error: e.message }); 
+  }
 
   try {
-    // close websocket server and all clients
+    // close websocket server and all clients with proper shutdown code
+    const clientCount = wss.clients.size;
+    logger.info('Closing WebSocket clients', { client_count: clientCount });
+    
     wss.clients.forEach((ws) => {
       try {
+        // First close SSH connections cleanly
         if (ws._sshStream && typeof ws._sshStream.end === 'function') {
-          try { ws._sshStream.end(); } catch (e) {}
+          try { 
+            ws._sshStream.end(); 
+            logger.debug('SSH stream ended for client');
+          } catch (e) { 
+            logger.debug('Error ending SSH stream', { error: e.message }); 
+          }
         }
         if (ws._sshClient && typeof ws._sshClient.end === 'function') {
-          try { ws._sshClient.end(); } catch (e) {}
+          try { 
+            ws._sshClient.end(); 
+            logger.debug('SSH client ended for client');
+          } catch (e) { 
+            logger.debug('Error ending SSH client', { error: e.message }); 
+          }
         }
-        try { ws.close(); } catch (e) { try { ws.terminate(); } catch (e2) {} }
-      } catch (e) { /* ignore per-client errors */ }
+        
+        // Close WebSocket with proper shutdown code
+        try { 
+          ws.close(1001, 'Server shutdown'); 
+          logger.debug('WebSocket closed with code 1001');
+        } catch (e) { 
+          logger.debug('Error closing WebSocket, trying terminate', { error: e.message });
+          try { ws.terminate(); } catch (e2) { 
+            logger.debug('Error terminating WebSocket', { error: e2.message }); 
+          }
+        }
+      } catch (e) { 
+        logger.debug('Error during client shutdown', { error: e.message }); 
+      }
     });
-    try { wss.close(() => { console.log('WebSocket server closed'); }); } catch (e) { console.warn('error closing wss', e); }
-  } catch (e) { console.warn('error during websocket shutdown', e); }
+    
+    // Close the WebSocket server itself
+    try { 
+      wss.close(() => { 
+        logger.info('WebSocket server closed'); 
+      }); 
+    } catch (e) { 
+      logger.warn('error closing wss', { error: e.message }); 
+    }
+  } catch (e) { 
+    logger.warn('error during websocket shutdown', { error: e.message }); 
+  }
 
   // give a short grace period then exit
   setTimeout(() => {
-    console.log('Shutdown complete, exiting');
+    logger.info('Shutdown complete, exiting');
     process.exit(0);
   }, 3000);
 }
