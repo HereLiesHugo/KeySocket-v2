@@ -113,19 +113,30 @@ app.use(helmet({
   crossOriginResourcePolicy: false
 }));
 
-// CSP fallback in case Nginx misconfiguration
+// CSP fallback in case Nginx misconfiguration (matches Nginx config)
 app.use((req, res, next) => {
   if (!res.getHeader('Content-Security-Policy')) {
     res.setHeader("Content-Security-Policy", 
       "default-src 'self'; " +
-      "script-src 'self' 'unsafe-inline'; " +
-      "style-src 'self' 'unsafe-inline'; " +
+      "script-src 'self' 'unsafe-eval' " +
+        "'sha256-51AbVm95/bXyZWOhL4XUEH7oO//14QSsMzS9dJ4HAHI=' " +
+        "'sha256-YjP9NejlrkKr07NlpI0X4jV+JyxjWifNyQbWA/sqfu8=' " +
+        "https://challenges.cloudflare.com " +
+        "https://cdn.jsdelivr.net " +
+        "https://static.cloudflareinsights.com; " +
+      "style-src 'self' 'unsafe-inline' " +
+        "https://cdn.jsdelivr.net " +
+        "https://fonts.googleapis.com " +
+        "https://cdnjs.cloudflare.com; " +
+      "font-src 'self' " +
+        "https://fonts.gstatic.com " +
+        "https://cdnjs.cloudflare.com; " +
       "img-src 'self' data: https:; " +
-      "connect-src 'self' wss: ws:; " +
-      "font-src 'self'; " +
-      "object-src 'none'; " +
-      "media-src 'self'; " +
-      "frame-src 'none';"
+      "connect-src 'self' ws: wss: " +
+        "https://cloudflareinsights.com " +
+        "https://challenges.cloudflare.com " +
+        "https://static.cloudflareinsights.com; " +
+      "frame-src 'self' https://challenges.cloudflare.com;"
     );
   }
   next();
