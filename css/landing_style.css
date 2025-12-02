@@ -145,6 +145,33 @@ body {
     width: 100%;
 }
 
+.nav-menu .kofi-link {
+    color: #ff5e5b;
+    font-weight: 600;
+    padding: 6px 12px;
+    border: 1px solid #ff5e5b;
+    border-radius: 6px;
+    transition: all 0.3s ease;
+    position: absolute;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.nav-menu .kofi-link .kofi-icon {
+    width: 20px;
+    height: 16px;
+}
+
+.nav-menu .kofi-link:hover {
+    background: #ff5e5b;
+    color: white;
+    transform: translateY(-1px);
+}
+
 .nav-toggle {
     display: none;
     flex-direction: column;
@@ -809,6 +836,12 @@ body {
     .footer-links {
         flex-direction: column;
         gap: 1rem;
+    }
+
+    .nav-menu .kofi-link {
+        position: static;
+        transform: none;
+        margin-top: 1rem;
     }
 }
 
