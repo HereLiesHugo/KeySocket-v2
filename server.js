@@ -124,6 +124,9 @@ app.use((req, res, next) => {
         "'sha256-gj6IB38jtvdWbaqYbrth6Tfn/uGW8gNDaQX5n47a/rY=' " +
         "'sha256-b5ZZ7GeGNY3rnCsgVzgKDt3i/OU504qSTwaIOSqu0xA=' " +
         "'sha256-zJ0i5jxdSrH1FnKjFTtqndCZv4sOOinr2V0FYy/qUYM=' " +
+        "'sha256-GAEWvptc7gBRWsWwhJ4hc8G4xPAH6dlDCDRyN3QrxQg=' " +
+        "'sha256-XE/rk1B1hi3MM4L/gFLf0ld8k4UBfe30haqIxm4Om+0=' " +
+        "'sha256-sSE0eU9JEHCECAOMSXkHIyD43AmAVBPvw56cdRedOyI=' " +
         "https://challenges.cloudflare.com " +
         "https://cdn.jsdelivr.net " +
         "https://static.cloudflareinsights.com; " +
@@ -147,8 +150,57 @@ app.use((req, res, next) => {
   next();
 });
 
+// CORS middleware for cross-origin requests
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  // Allow same-origin and specific CDN domains
+  const allowedOrigins = [
+    'https://keysocket.eu',
+    'https://www.keysocket.eu',
+    'https://cdn.jsdelivr.net',
+    'https://cdnjs.cloudflare.com',
+    'https://fonts.googleapis.com',
+    'https://fonts.gstatic.com',
+    'https://challenges.cloudflare.com'
+  ];
+  
+  if (allowedOrigins.includes(origin) || !origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+  }
+  
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
+  next();
+});
+
 app.use(express.json({ limit: '200kb' }));
 app.use(express.urlencoded({ extended: false }));
+
+// Static file serving with caching
+app.use('/lib', express.static('lib', {
+  maxAge: '1y',
+  etag: true,
+  lastModified: true,
+  setHeaders: (res, path) => {
+    if (path.endsWith('.js')) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    } else if (path.endsWith('.css')) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    }
+  }
+}));
+
+app.use('/js', express.static('js', {
+  maxAge: '1d',
+  etag: true,
+  lastModified: true
+}));
 
 // Session parser for WebSocket connections
 function parseWebSocketSession(cookieHeader, callback) {
@@ -574,9 +626,7 @@ app.post('/turnstile-verify', (req, res) => {
                 ip: req.socket.remoteAddress || 'unknown'
               });
               
-              // Ensure response headers are properly set
-              res.setHeader('Content-Type', 'application/json');
-              res.setHeader('Content-Length', Buffer.byteLength(JSON.stringify({ ok: true, token: serverToken, ttl: TURNSTILE_TOKEN_TTL_MS })));
+              // Send response without explicit Content-Length to let Express handle it
               return res.status(200).json({ ok: true, token: serverToken, ttl: TURNSTILE_TOKEN_TTL_MS });
             });
           }
@@ -608,6 +658,9 @@ app.post('/turnstile-verify', (req, res) => {
   req2.write(postData);
   req2.end();
 });
+
+// Trust proxy for proper IP handling behind Nginx
+app.set('trust proxy', true);
 
 // Create underlying server (HTTPS if TLS available and configured)
 let server;

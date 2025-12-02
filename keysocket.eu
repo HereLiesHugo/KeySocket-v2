@@ -59,6 +59,9 @@ server {
             'sha256-gj6IB38jtvdWbaqYbrth6Tfn/uGW8gNDaQX5n47a/rY='
             'sha256-b5ZZ7GeGNY3rnCsgVzgKDt3i/OU504qSTwaIOSqu0xA='
             'sha256-zJ0i5jxdSrH1FnKjFTtqndCZv4sOOinr2V0FYy/qUYM='
+            'sha256-GAEWvptc7gBRWsWwhJ4hc8G4xPAH6dlDCDRyN3QrxQg='
+            'sha256-XE/rk1B1hi3MM4L/gFLf0ld8k4UBfe30haqIxm4Om+0='
+            'sha256-sSE0eU9JEHCECAOMSXkHIyD43AmAVBPvw56cdRedOyI='
             https://challenges.cloudflare.com
             https://cdn.jsdelivr.net
             https://static.cloudflareinsights.com;
