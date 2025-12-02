@@ -1,57 +1,56 @@
-# keysocket.eu - Reverse proxy to Node on localhost:3000
-
-# Map for websocket Connection header
+# Map for WebSocket Connection Header
 map $http_upgrade $connection_upgrade {
-    default      upgrade;
-    ''           close;
+    default upgrade;
+    ''      close;
 }
 
-# --- BOT FILTER FIXED ---
-# Googlebot and other search engines have been REMOVED from this list.
-# We only block aggressive scrapers here.
+# Bot Filter - Blocks aggressive scrapers
 map $http_user_agent $is_bad_bot {
     default 0;
     ~*(360Spider|facebot|AhrefsBot|SEMrushBot|DotBot|MJ12bot|Heritrix) 1;
 }
 
-# Redirect HTTP -> HTTPS
+# 1. HTTP -> HTTPS Redirect
 server {
     listen 80;
     listen [::]:80;
     server_name keysocket.eu www.keysocket.eu;
 
-    access_log /var/log/nginx/keysocket-http.access.log;
-    error_log /var/log/nginx/keysocket-http.error.log;
-
+    # Allow Certbot/Let's Encrypt validation
     location /.well-known/acme-challenge/ {
         root /var/www/html;
     }
 
+    # Redirect all other traffic to HTTPS
     location / {
         return 301 https://$host$request_uri;
     }
 }
 
-# HTTPS server
+# 2. HTTPS Server
 server {
     listen 443 ssl;
     listen [::]:443 ssl;
     http2 on;
     server_name keysocket.eu www.keysocket.eu;
 
-    # SSL (managed by Certbot)
+    # --- SSL CONFIGURATION (Certbot managed) ---
     ssl_certificate /etc/letsencrypt/live/keysocket.eu/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/keysocket.eu/privkey.pem;
     include /etc/letsencrypt/options-ssl-nginx.conf;
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
 
-    # Security headers
+    # --- SECURITY HEADERS ---
+    # Don't announce Nginx version
+    server_tokens off;
+    
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+    add_header X-Robots-Tag "index, follow" always;
 
-    # Content Security Policy
+    # Content Security Policy (Preserved from your original config)
     add_header Content-Security-Policy "
         default-src 'self';
         script-src 'self' 'unsafe-eval'
@@ -75,125 +74,89 @@ server {
         frame-src 'self' https://challenges.cloudflare.com;
     " always;
 
-    # --- GLOBAL SEO HEADER ---
-    # Explicitly allows indexing for the whole site
-    add_header X-Robots-Tag "index, follow" always;
-
-    # Limits
-    client_max_body_size 50M;
-    proxy_read_timeout 3600s;
-    proxy_send_timeout 3600s;
-    proxy_connect_timeout 30s;
-
-    # Logging
+    # --- LOGGING ---
     access_log /var/log/nginx/keysocket.access.log;
     error_log /var/log/nginx/keysocket.error.log;
 
-    # Block bad bots (Only if map returns 1)
+    # --- BAD BOT BLOCKING ---
     if ($is_bad_bot) {
         return 444;
     }
 
-    # Redirect *.html to no-extension URLs
-    location ~ ^/(console|index|privacy)\.html$ {
-        return 301 /$1;
-    }
-
-    # /console -> console.html
-    location = /console {
-        proxy_pass http://127.0.0.1:3000/console.html;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_hide_header Content-Security-Policy;
-    }
-
-    # /index -> index.html
-    location = /index {
-        proxy_pass http://127.0.0.1:3000/index.html;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_hide_header Content-Security-Policy;
-    }
-
-    # /privacy -> pages/privacy.html
-    location = /privacy {
-        proxy_pass http://127.0.0.1:3000/pages/privacy.html;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_hide_header Content-Security-Policy;
-    }
-
-    # WebSocket endpoint
-    location /ssh {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_http_version 1.1;
-
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection $connection_upgrade;
-
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-
-        proxy_hide_header Content-Security-Policy;
-
-        proxy_buffering off;
-        proxy_cache_bypass $http_upgrade;
-        proxy_read_timeout 86400;
-        proxy_send_timeout 86400;
-    }
-
-    # Default app proxy
-    location / {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_http_version 1.1;
-
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection $connection_upgrade;
-
-        proxy_hide_header Content-Security-Policy;
-        proxy_cache_bypass $http_upgrade;
-    }
-
-    # --- SITEMAP CONFIG ---
+    # --- STATIC FILE HANDLING (Nginx handles this, Node is ignored) ---
+    
+    # Sitemap
     location = /sitemap.xml {
         root /var/www/keysocket.eu;
         access_log off;
-        add_header Cache-Control "public, max-age=3600, s-maxage=86400" always;
+        log_not_found off;
+        add_header Cache-Control "public, max-age=3600" always;
         add_header Content-Type "application/xml; charset=utf-8" always;
-        add_header X-Robots-Tag "index, follow" always;
         try_files $uri =404;
     }
 
-    # robots.txt
+    # Robots.txt
     location = /robots.txt {
         root /var/www/keysocket.eu;
         access_log off;
-        add_header Cache-Control "public, max-age=3600, s-maxage=86400" always;
+        log_not_found off;
         add_header Content-Type "text/plain; charset=utf-8" always;
         try_files $uri =404;
     }
 
-    # --- IMAGES CONFIG ---
-    # This handles the specific logo path in your sitemap
+    # Images (e.g. https://keysocket.eu/img/logo.png)
     location /img/ {
         root /var/www/keysocket.eu;
-        add_header Cache-Control "public, max-age=86400, s-maxage=604800";
+        expires 7d;
+        add_header Cache-Control "public, no-transform";
+        access_log off;
         try_files $uri =404;
+    }
+
+    # --- NODE.JS APPLICATION ---
+
+    # Upload limit
+    client_max_body_size 50M;
+
+    # WebSocket Proxy (/ssh)
+    location /ssh {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+
+        # WebSocket headers
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+
+        # Standard Proxy headers
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Timeouts for long SSH sessions
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
+        
+        # Disable buffering for real-time interaction
+        proxy_buffering off;
+    }
+
+    # Main App Proxy (Catch-all)
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+
+        # Forward headers
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Support Websockets on root if needed (optional but safe to keep)
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        
+        # Hide internal upstream headers
+        proxy_hide_header X-Powered-By;
     }
 }

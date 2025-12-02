@@ -413,56 +413,7 @@ app.get('/console.html', serveConsole);
 app.get('/health', (req, res) => res.json({ ok: true, env: process.env.NODE_ENV || 'development' }));
 
 // Sitemap endpoint
-app.get('/sitemap.xml', (req, res) => {
-  const sitemapPath = path.join(__dirname, 'sitemap.xml');
-
-  // Set headers first
-  res.setHeader('Content-Type', 'application/xml; charset=utf-8');
-  res.setHeader('Cache-Control', 'public, max-age=3600');
-
-  if (fs.existsSync(sitemapPath)) {
-    try {
-      const xmlContent = fs.readFileSync(sitemapPath, 'utf8');
-      return res.status(200).send(xmlContent);
-    } catch (e) {
-      console.error('Error reading sitemap:', e);
-    }
-  }
-
-  // Fallback if file doesn't exist or can't be read
-  const fallback = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
-    <loc>https://keysocket.eu/</loc>
-    <lastmod>${new Date().toISOString().split('T')[0]}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>1.0</priority>
-  </url>
-</urlset>`;
-  res.status(200).send(fallback);
-});
-
-// Robots.txt endpoint
-app.get('/robots.txt', (req, res) => {
-  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-  const robotsPath = path.join(__dirname, 'robots.txt');
-  if (fs.existsSync(robotsPath)) {
-    return res.sendFile(robotsPath);
-  }
-  // Fallback if file doesn't exist
-  res.send(`User-agent: *
-Disallow: /private/
-Disallow: /admin/
-Disallow: /api/
-Disallow: /socket.io/
-Disallow: /*.json$
-Disallow: /*?*$
-Crawl-delay: 1
-
-Allow: /
-
-Sitemap: https://keysocket.eu/sitemap.xml`);
-});
+// Fully Moved to nginx
 
 // Turnstile verification endpoint - accepts a client token and verifies with Cloudflare
 app.post('/turnstile-verify', (req, res) => {
