@@ -863,48 +863,79 @@
     function onTurnstileToken(token) {
         if (!token) return;
         // FIXED: Allowed even if authenticated to refresh token
-        // send token to server for verification
-        fetch('/turnstile-verify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token })
-        }).then(r => {
-            console.debug('turnstile verify raw response status:', r.status);
-            return r.text();
-        }).then(text => {
-            let j;
-            try { j = JSON.parse(text); } catch (e) { throw new Error('Invalid JSON'); }
-            
+        // send token to server for verification (with client-side retry and better error UI)
+        verifyTurnstileToken(token).then(j => {
             if (j && j.ok && j.token) {
-                // store the server-issued one-time token temporarily
                 ksTurnstileToken = j.token;
                 ksTurnstileTTL = parseInt(j.ttl || '30000', 10) || 30000;
                 ksTurnstileVerifiedAt = Date.now();
 
-                // FIXED: Check if already authenticated. If so, don't redirect.
+                // Hide overlay if user is authenticated
                 if (ksIsAuthenticated) {
-                     const ov = document.getElementById('turnstile-overlay');
-                     if (ov) ov.style.display = 'none';
-                     if (connectBtn) connectBtn.disabled = false;
-                     // Optional: Show a small "Ready" indicator if needed
+                    const ov = document.getElementById('turnstile-overlay');
+                    if (ov) ov.style.display = 'none';
+                    if (connectBtn) connectBtn.disabled = false;
                 } else {
-                     // Not authenticated? Then redirect to Google OAuth
-                     window.location.href = '/auth/google';
+                    window.location.href = '/auth/google';
                 }
 
-                // clean up widget to avoid duplicate renders later
+                // clean up widget
                 try {
                     const widgetEl = document.getElementById('turnstile-widget');
-                    // Only clear if we are hiding the overlay, otherwise user might want to see it?
-                    // Actually, if we got a token, we are good.
                     if (widgetEl && !ksIsAuthenticated) { widgetEl.innerHTML = ''; delete widgetEl.dataset.turnstileRendered; }
                     ksTurnstileWidgetId = null;
                     ksTurnstileRendered = false;
                 } catch (e) {}
             } else {
                 console.warn('Turnstile verify failed', j);
+                showTurnstileError('Verification failed. Please try again.');
             }
-        }).catch(err => console.error('turnstile verify error', err));
+        }).catch(err => {
+            console.error('turnstile verify error', err);
+            showTurnstileError(err && err.message ? err.message : 'Verification error');
+        });
+    }
+
+    function showTurnstileError(msg) {
+        try {
+            const ov = document.getElementById('turnstile-overlay');
+            if (!ov) return;
+            let el = document.getElementById('turnstile-error');
+            if (!el) {
+                el = document.createElement('div');
+                el.id = 'turnstile-error';
+                el.style.color = '#ffdddd';
+                el.style.background = '#600';
+                el.style.padding = '8px';
+                el.style.marginTop = '8px';
+                el.style.borderRadius = '4px';
+                el.style.fontSize = '14px';
+                ov.appendChild(el);
+            }
+            el.textContent = msg;
+        } catch (e) { console.error('showTurnstileError failed', e); }
+    }
+
+    function verifyTurnstileToken(token, attempt = 0) {
+        const MAX = 2; // client-side retries
+        const backoff = 200 * Math.pow(2, attempt);
+        return fetch('/turnstile-verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token }),
+            credentials: 'same-origin'
+        }).then(res => {
+            if (res.status >= 500) {
+                if (attempt < MAX) {
+                    return new Promise((resolve, reject) => setTimeout(() => verifyTurnstileToken(token, attempt + 1).then(resolve).catch(reject), backoff));
+                }
+                throw new Error('Verification provider unavailable (server error). Please try again later.');
+            }
+            if (res.status === 502 || res.status === 503) throw new Error('Verification provider temporarily unavailable');
+            const ct = res.headers.get('content-type') || '';
+            if (!/application\/json/.test(ct)) throw new Error('Unexpected response from verification provider');
+            return res.json();
+        });
     }
 
     function initTurnstile() {
