@@ -625,101 +625,134 @@ app.post('/turnstile-verify', (req, res) => {
     return res.status(500).json({ ok: false, message: 'server misconfigured: TURNSTILE_SECRET not set' });
   }
 
-  // verify with Cloudflare
+  // verify with Cloudflare, with a single retry for transient server errors
   const postData = `secret=${encodeURIComponent(TURNSTILE_SECRET)}&response=${encodeURIComponent(token)}&remoteip=${encodeURIComponent(req.socket.remoteAddress || '')}`;
-  const options = {
-    hostname: 'challenges.cloudflare.com',
-    path: '/turnstile/v0/siteverify',
-    method: 'POST',
-    headers: { 
-      'Content-Type': 'application/x-www-form-urlencoded', 
-      'Content-Length': Buffer.byteLength(postData),
-      'User-Agent': 'KeySocket-Server/1.0', // FIXED: Added User-Agent to avoid blocking
-      'Accept': 'application/json'          // FIXED: Explicitly accept JSON
-    }
-  };
 
-  console.log(`[Turnstile] Verifying token for IP ${req.socket.remoteAddress || 'unknown'}`);
-  const req2 = https.request(options, (resp) => {
-    let data = '';
-    resp.on('data', (chunk) => { 
-      data += chunk.toString(); 
-      console.log(`[Turnstile] Received chunk of ${chunk.length} bytes, total: ${data.length}`);
-    });
-    resp.on('end', () => {
-      console.log(`[Turnstile] Complete response received, length: ${data.length}, status: ${resp.statusCode}`);
-      console.log(`[Turnstile] Response headers:`, resp.headers);
-      
-      try {
-          const parsed = JSON.parse(data);
-          console.log(`[Turnstile] Cloudflare response: success=${parsed.success}, error-codes=${JSON.stringify(parsed['error-codes'] || [])}`);
-          if (parsed && parsed.success) {
-            // Check if user has a session
-            if (!req.session) {
-              console.warn('[Turnstile] No session available for token storage');
-              return res.status(500).json({ ok: false, message: 'session required' });
-            }
-            
-            // generate a server-side one-time token and store in session
-            const serverToken = require('crypto').randomBytes(24).toString('hex');
-            const expires = Date.now() + TURNSTILE_TOKEN_TTL_MS;
-            
-            // Store token in session and send response immediately
-            req.session.turnstileToken = serverToken;
-            req.session.turnstileTokenExpires = expires;
-            req.session.turnstileVerifiedIP = req.socket.remoteAddress || '';
-            
-            // Send response immediately, save session in background to avoid blocking
-            const responseData = JSON.stringify({ ok: true, token: serverToken, ttl: TURNSTILE_TOKEN_TTL_MS });
-            console.log(`[Turnstile] Sending response: ${responseData}`);
-            res.setHeader('Content-Type', 'application/json');
-            res.setHeader('Content-Length', Buffer.byteLength(responseData));
-            res.status(200).end(responseData);
-            
-            // Save session asynchronously
-            req.session.save((saveErr) => {
-              if (saveErr) {
-                logger.error('[Turnstile] Failed to save session', saveErr);
-              } else {
-                logger.info('Turnstile verification successful, token stored in session', {
-                  user_email: req.session.passport?.user?.email || 'anonymous',
-                  ip: req.socket.remoteAddress || 'unknown'
-                });
-              }
-            });
-          } else {
-            console.warn(`[Turnstile] Verification failed: ${JSON.stringify(parsed)}`);
-            return res.status(400).json({ ok: false, message: 'verification failed', details: parsed });
-          }
-      } catch (e) {
-        console.error(`[Turnstile] Failed to parse Cloudflare response: ${e.message}`);
-        // Log truncated response if it's HTML to help debugging
-        if (data.trim().startsWith('<')) {
-            console.error(`[Turnstile] Received HTML instead of JSON. Preview: ${data.substring(0, 150)}...`);
-        }
-        return res.status(500).json({ ok: false, message: 'invalid response from turnstile' });
+  const MAX_RETRIES = parseInt(process.env.TURNSTILE_MAX_RETRIES || '1', 10);
+  const TIMEOUT_MS = parseInt(process.env.TURNSTILE_REQUEST_TIMEOUT_MS || '10000', 10);
+
+  const verifyWithCloudflare = (attempt = 0) => new Promise((resolve, reject) => {
+    const options = {
+      hostname: 'challenges.cloudflare.com',
+      path: '/turnstile/v0/siteverify',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Length': Buffer.byteLength(postData),
+        'User-Agent': 'KeySocket-Server/1.0',
+        'Accept': 'application/json',
+        'Connection': 'close'
       }
+    };
+
+    const r2 = https.request(options, (resp) => {
+      let data = '';
+      let aborted = false;
+
+      resp.on('data', (chunk) => { data += chunk.toString(); });
+
+      resp.on('aborted', () => { aborted = true; });
+
+      resp.on('end', () => {
+        if (aborted) return reject(new Error('response aborted'));
+
+        const statusOk = resp.statusCode === 200;
+        const contentType = (resp.headers['content-type'] || '') + '';
+        const looksJson = /application\/json/.test(contentType.toLowerCase());
+
+        if (!statusOk || !looksJson) {
+          // Retry on server errors (5xx)
+          if (resp.statusCode >= 500 && attempt < MAX_RETRIES) {
+            const backoff = 200 * Math.pow(2, attempt);
+            logger.warn('Turnstile provider error, retrying', { status: resp.statusCode, attempt, backoff });
+            return setTimeout(() => verifyWithCloudflare(attempt + 1).then(resolve).catch(reject), backoff);
+          }
+          const err = new Error('turnstile provider error');
+          err.status = resp.statusCode;
+          err.body = data;
+          err.headers = resp.headers;
+          return reject(err);
+        }
+
+        // Check length mismatch for diagnostics
+        const declaredLen = parseInt(resp.headers['content-length'] || '0', 10) || 0;
+        if (declaredLen > 0 && declaredLen !== data.length) {
+          logger.warn('Turnstile response length mismatch', { declared: declaredLen, received: data.length });
+        }
+
+        try {
+          const parsed = JSON.parse(data);
+          return resolve(parsed);
+        } catch (e) {
+          const err = new Error('invalid json');
+          err.body = data;
+          return reject(err);
+        }
+      });
+
+      resp.on('error', (e) => reject(e));
     });
+
+    r2.on('timeout', () => {
+      r2.destroy();
+      return reject(new Error('timeout'));
+    });
+
+    r2.on('error', (err) => {
+      // Network error; retry once for transient errors
+      if (attempt < MAX_RETRIES) {
+        const backoff = 200 * Math.pow(2, attempt);
+        logger.warn('Turnstile request network error, retrying', { error: err.message, attempt, backoff });
+        return setTimeout(() => verifyWithCloudflare(attempt + 1).then(resolve).catch(reject), backoff);
+      }
+      return reject(err);
+    });
+
+    r2.setTimeout(TIMEOUT_MS);
+    r2.write(postData);
+    r2.end();
   });
 
-  req2.on('error', (err) => { 
-    console.error('[Turnstile] Request error:', err.message); 
+  verifyWithCloudflare().then((parsed) => {
+    if (parsed && parsed.success) {
+      if (!req.session) {
+        logger.warn('[Turnstile] No session available for token storage');
+        return res.status(500).json({ ok: false, message: 'session required' });
+      }
+
+      const serverToken = require('crypto').randomBytes(24).toString('hex');
+      const expires = Date.now() + TURNSTILE_TOKEN_TTL_MS;
+
+      req.session.turnstileToken = serverToken;
+      req.session.turnstileTokenExpires = expires;
+      req.session.turnstileVerifiedIP = req.socket.remoteAddress || '';
+
+      const responseData = JSON.stringify({ ok: true, token: serverToken, ttl: TURNSTILE_TOKEN_TTL_MS });
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Length', Buffer.byteLength(responseData));
+      res.status(200).end(responseData);
+
+      req.session.save((saveErr) => {
+        if (saveErr) {
+          logger.error('[Turnstile] Failed to save session', saveErr);
+        } else {
+          logger.info('Turnstile verification successful, token stored in session', {
+            user_email: req.session.passport?.user?.email || 'anonymous',
+            ip: req.socket.remoteAddress || 'unknown'
+          });
+        }
+      });
+    } else {
+      logger.warn('[Turnstile] Verification failed', { parsed });
+      return res.status(400).json({ ok: false, message: 'verification failed', details: parsed });
+    }
+  }).catch((err) => {
+    logger.error('[Turnstile] Verification request failed', { error: err && err.message, status: err && err.status });
     if (!res.headersSent) {
-      res.status(500).json({ ok: false, message: 'verification error' }); 
+      if (err && err.status && err.status >= 500) return res.status(502).json({ ok: false, message: 'turnstile provider error' });
+      return res.status(500).json({ ok: false, message: 'verification error' });
     }
   });
-
-  req2.on('timeout', () => {
-    console.error('[Turnstile] Request timeout');
-    req2.destroy();
-    if (!res.headersSent) {
-      res.status(500).json({ ok: false, message: 'verification timeout' }); 
-    }
-  });
-
-  req2.setTimeout(10000); // 10 second timeout
-  req2.write(postData);
-  req2.end();
 });
 
 // Trust proxy already configured earlier (BEHIND_PROXY / default true)
