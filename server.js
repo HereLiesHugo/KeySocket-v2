@@ -343,7 +343,6 @@ if (!fs.existsSync(sessionsDir)) {
 // Create session store explicitly
 const sessionStore = new FileStore({ 
   path: sessionsDir, 
-  secret: process.env.FILESTORE_ENCRYPTION_KEY,
   ttl: 86400, // 24 hours
   retries: 0,
   reapInterval: 3600000, // Clean up expired sessions every hour (in milliseconds)
