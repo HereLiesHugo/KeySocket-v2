@@ -205,10 +205,21 @@ app.use('/js', express.static('js', {
   lastModified: true
 }));
 
+// Helper: determine remote IP with proxy awareness
+function getReqRemoteIp(req) {
+  if (BEHIND_PROXY && req && req.headers && req.headers['x-forwarded-for']) {
+    // x-forwarded-for may be a comma-separated list
+    return req.headers['x-forwarded-for'].split(',')[0].trim();
+  }
+  return req && req.socket ? req.socket.remoteAddress : 'unknown';
+}
+
 // Session parser for WebSocket connections
-function parseWebSocketSession(cookieHeader, callback) {
+// Now accepts the full `req` object so we can bind/verify IPs and set timeouts
+function parseWebSocketSession(req, callback) {
+  const cookieHeader = req && req.headers ? req.headers.cookie : null;
   if (!cookieHeader) {
-    logger.debug('WebSocket connection without cookie header', { ip: 'unknown' });
+    logger.debug('WebSocket connection without cookie header', { ip: getReqRemoteIp(req) });
     return callback(null, null);
   }
 
@@ -228,7 +239,7 @@ function parseWebSocketSession(cookieHeader, callback) {
     });
 
     if (!rawSessionId) {
-      logger.debug('No connect.sid found in WebSocket cookies');
+      logger.debug('No connect.sid found in WebSocket cookies', { ip: getReqRemoteIp(req) });
       return callback(null, null);
     }
 
@@ -254,8 +265,19 @@ function parseWebSocketSession(cookieHeader, callback) {
       has_get_method: typeof sessionStore.get
     });
 
-    // Get session from store
+    // Get session from store with a timeout to avoid hanging upgrades
+    const GET_TIMEOUT_MS = parseInt(process.env.SESSION_STORE_GET_TIMEOUT_MS || '2000', 10);
+    let called = false;
+    const timer = setTimeout(() => {
+      called = true;
+      logger.error('Session store get timeout', { session_id: cleanSessionId, timeout_ms: GET_TIMEOUT_MS });
+      return callback(new Error('session timeout'), null);
+    }, GET_TIMEOUT_MS);
+
     sessionStore.get(cleanSessionId, (err, session) => {
+      if (called) return; // already timed out
+      clearTimeout(timer);
+
       if (err) {
         logger.error('Error retrieving WebSocket session from store', {
           session_id: cleanSessionId,
@@ -273,6 +295,9 @@ function parseWebSocketSession(cookieHeader, callback) {
 
       logger.debug('WebSocket session found, checking authentication');
 
+      // Attach sessionId and any Turnstile binding found
+      const turnstileVerifiedIP = session.turnstileVerifiedIP || null;
+
       // Check if user is authenticated via Passport
       if (session.passport && session.passport.user) {
         logger.info('WebSocket user authenticated successfully', {
@@ -284,7 +309,9 @@ function parseWebSocketSession(cookieHeader, callback) {
         return callback(null, {
           authenticated: true,
           user: session.passport.user,
-          session: session // Include session object for Turnstile token verification
+          session: session, // Include session object for Turnstile token verification
+          sessionId: cleanSessionId,
+          turnstileVerifiedIP: turnstileVerifiedIP
         });
       }
 
@@ -744,14 +771,60 @@ const wss = new WebSocketServer({
   maxPayload: 2 * 1024 * 1024,
   verifyClient: (info, done) => {
     // Parse and verify session during WebSocket upgrade
-    parseWebSocketSession(info.req.headers.cookie, (err, sessionData) => {
+    parseWebSocketSession(info.req, async (err, sessionData) => {
+      const remoteIp = getReqRemoteIp(info.req);
       if (err || !sessionData || !sessionData.authenticated) {
-        console.log(`[WebSocket] Rejected connection from ${info.req.socket.remoteAddress}: Not authenticated`);
+        logger.warn('WebSocket upgrade rejected: unauthenticated or session error', { ip: remoteIp, err: err ? err.message : undefined });
         done(false, 401, 'Unauthorized: Authentication required');
         return;
       }
 
-      console.log(`[WebSocket] Accepted connection from ${info.req.socket.remoteAddress} for user ${sessionData.user.email}`);
+      // Check for a server-issued Turnstile token on the upgrade.
+      // Support passing it via Sec-WebSocket-Protocol (first value) or Authorization: Bearer <token>
+      let tsToken = null;
+      try {
+        const protoHeader = info.req.headers['sec-websocket-protocol'];
+        if (protoHeader) {
+          tsToken = protoHeader.split(',')[0].trim();
+          if (tsToken && tsToken.startsWith('ts=')) tsToken = tsToken.slice(3);
+        }
+        if (!tsToken && info.req.headers && info.req.headers.authorization) {
+          const m = info.req.headers.authorization.match(/^Bearer\s+(.*)$/i);
+          if (m) tsToken = m[1];
+        }
+      } catch (e) { /* ignore parsing errors */ }
+
+      // If a token is provided, consume and bind it to this session (persisting turnstileVerifiedIP)
+      if (tsToken) {
+        if (!consumeVerifiedToken(tsToken, remoteIp)) {
+          logger.warn('WebSocket upgrade rejected: invalid/expired turnstile token', { ip: remoteIp, user: sessionData.user.email });
+          done(false, 401, 'Invalid turnstile token');
+          return;
+        }
+
+        // Persist binding to session so subsequent upgrades from same session validate
+        try {
+          const sess = sessionData.session || {};
+          sess.turnstileVerifiedIP = remoteIp;
+          // write back to session store (best-effort)
+          if (sessionData.sessionId && sessionStore && typeof sessionStore.set === 'function') {
+            sessionStore.set(sessionData.sessionId, sess, (err) => {
+              if (err) logger.warn('Failed to persist turnstileVerifiedIP to session', { session_id: sessionData.sessionId, error: err.message });
+            });
+          }
+        } catch (e) {
+          logger.warn('Failed to bind turnstile token to session', { error: e.message });
+        }
+      } else {
+        // No token provided on upgrade — require session to have an IP-bound turnstile verification
+        if (!sessionData.turnstileVerifiedIP || sessionData.turnstileVerifiedIP !== remoteIp) {
+          logger.warn('WebSocket upgrade rejected: missing or mismatched turnstile binding on session', { ip: remoteIp, session_turnstile_ip: sessionData.turnstileVerifiedIP });
+          done(false, 401, 'Turnstile verification required');
+          return;
+        }
+      }
+
+      logger.info('WebSocket upgrade accepted', { ip: remoteIp, user: sessionData.user.email });
       // Store session data on the request for use in connection handler
       info.req.sessionData = sessionData;
       done(true);
