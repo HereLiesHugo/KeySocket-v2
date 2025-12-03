@@ -77,7 +77,10 @@ logger.info('=== KeySocket Server Starting ===', {
 const app = express();
 
 // ensure secure cookies (sessions) work when behind a proxy/CDN like Cloudflare
-app.set('trust proxy', 1);
+// Allow explicit override with BEHIND_PROXY env var. Default to true (assume proxy in front).
+const BEHIND_PROXY = typeof process.env.BEHIND_PROXY !== 'undefined' ? (process.env.BEHIND_PROXY === 'true') : true;
+app.set('trust proxy', BEHIND_PROXY);
+logger.info('trust proxy set', { trust_proxy: BEHIND_PROXY });
 
 // Passport session setup
 passport.serializeUser((user, done) => done(null, user));
@@ -318,18 +321,35 @@ const sessionStore = new FileStore({
   reapInterval: 3600000 // Clean up expired sessions every hour (in milliseconds)
 });
 
+// Derive cookie.secure from runtime: if we're terminating TLS at the proxy
+// or running TLS in-process, mark cookies as Secure. Allow overriding sameSite via env.
+const cookieSecure = (process.env.USE_TLS === 'true') || BEHIND_PROXY;
+let cookieSameSite = (process.env.SESSION_COOKIE_SAMESITE || 'lax');
+// Browsers require SameSite=None to be paired with Secure flag; enforce that.
+if (cookieSameSite.toLowerCase() === 'none' && !cookieSecure) {
+  logger.warn('SESSION_COOKIE_SAMESITE set to "none" but cookies would not be Secure; overriding to "lax" to avoid browser rejection');
+  cookieSameSite = 'lax';
+}
+
 const sessionConfig = {
   store: sessionStore,
   secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: true,
+    secure: !!cookieSecure,
     httpOnly: true,
     maxAge: 24 * 60 * 60 * 1000,
-    sameSite: 'none'
+    sameSite: cookieSameSite
   }
 };
+
+// Log session cookie settings (masked/summary only)
+logger.info('Session configuration', {
+  cookie_secure: sessionConfig.cookie.secure,
+  cookie_sameSite: sessionConfig.cookie.sameSite,
+  session_ttl_ms: sessionConfig.cookie.maxAge ? sessionConfig.cookie.maxAge : undefined
+});
 
 // Initialize session middleware first
 const sessionMiddleware = session(sessionConfig);
@@ -675,8 +695,8 @@ app.post('/turnstile-verify', (req, res) => {
   req2.end();
 });
 
-// Trust proxy for proper IP handling behind Nginx
-app.set('trust proxy', true);
+// Trust proxy already configured earlier (BEHIND_PROXY / default true)
+// (duplicate removed)
 
 // Create underlying server (HTTPS if TLS available and configured)
 let server;
