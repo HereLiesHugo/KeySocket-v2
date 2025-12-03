@@ -723,9 +723,14 @@ app.post('/turnstile-verify', (req, res) => {
       const serverToken = require('crypto').randomBytes(24).toString('hex');
       const expires = Date.now() + TURNSTILE_TOKEN_TTL_MS;
 
-      req.session.turnstileToken = serverToken;
-      req.session.turnstileTokenExpires = expires;
-      req.session.turnstileVerifiedIP = req.socket.remoteAddress || '';
+            req.session.turnstileToken = serverToken;
+            req.session.turnstileTokenExpires = expires;
+            // Store the client's IP as seen by the app (respecting proxy headers)
+            try {
+              req.session.turnstileVerifiedIP = getReqRemoteIp(req) || '';
+            } catch (e) {
+              req.session.turnstileVerifiedIP = req.socket.remoteAddress || '';
+            }
 
       const responseData = JSON.stringify({ ok: true, token: serverToken, ttl: TURNSTILE_TOKEN_TTL_MS });
       res.setHeader('Content-Type', 'application/json');
