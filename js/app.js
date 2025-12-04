@@ -784,7 +784,6 @@
 
         socket.addEventListener('error', (err) => {
             try { term.writeln('\r\n[Socket error]'); } catch (e) {}
-            console.error('ws error', err);
             
             // Check if this is an authentication error
             const errorMessage = err.message || '';
@@ -966,7 +965,7 @@
             if (window.turnstile) {
                 try {
                     widgetEl.innerHTML = '';
-                    ksTurnstileWidgetId = window.turnstile.render('#turnstile-widget', { sitekey: '0x4AAAAAACDdgapByiL54XqC', callback: onTurnstileToken });
+                    ksTurnstileWidgetId = window.turnstile.render('#turnstile-widget', { sitekey: '__TURNSTILE_SITE_KEY__', callback: onTurnstileToken });
                     ksTurnstileRendered = true;
                     if (widgetEl.dataset) widgetEl.dataset.turnstileRendered = '1';
                 } catch (e) {
@@ -994,13 +993,24 @@
         if (ov) ov.style.display = 'flex';
         try {
             if (window.turnstile) {
-                if (ksTurnstileWidgetId) {
-                    try { window.turnstile.reset(ksTurnstileWidgetId); } catch (e) { ksTurnstileWidgetId = window.turnstile.render('#turnstile-widget', { sitekey: '0x4AAAAAACDdgapByiL54XqC', callback: onTurnstileToken }); }
-                } else {
-                    ksTurnstileWidgetId = window.turnstile.render('#turnstile-widget', { sitekey: '0x4AAAAAACDdgapByiL54XqC', callback: onTurnstileToken });
+                const widgetEl = document.getElementById('turnstile-widget');
+                if (widgetEl) {
+                    // Clear the widget completely
+                    widgetEl.innerHTML = '';
+                    widgetEl.dataset.turnstileRendered = '0';
+                    ksTurnstileWidgetId = null;
+                    ksTurnstileRendered = false;
+                    
+                    // Render fresh widget
+                    ksTurnstileWidgetId = window.turnstile.render('#turnstile-widget', { 
+                        sitekey: '__TURNSTILE_SITE_KEY__', 
+                        callback: onTurnstileToken 
+                    });
+                    ksTurnstileRendered = true;
+                    if (widgetEl.dataset) widgetEl.dataset.turnstileRendered = '1';
                 }
             }
-        } catch (e) { console.error('reRunTurnstile', e); }
+        } catch (e) { /* ignore errors */ }
     }
 
     // Show a lightweight banner based on ?auth=success|failure|already using static DOM + CSS

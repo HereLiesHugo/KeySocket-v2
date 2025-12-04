@@ -573,7 +573,7 @@ app.use((req, res, next) => {
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()');
+  res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=(), payment=(), fullscreen=(), screen-wake-lock=()');
   
   next();
 });
@@ -628,6 +628,9 @@ const ASSET_VERSION = process.env.ASSET_VERSION || (() => {
   try { return require(path.join(__dirname, 'package.json')).version || String(Date.now()); } catch (e) { return String(Date.now()); }
 })();
 
+// Turnstile site key for frontend
+const TURNSTILE_SITE_KEY = process.env.TURNSTILE_SITE_KEY || '0x4AAAAAACDdgapByiL54XqC';
+
 function serveConsole(req, res) {
   try {
     const consolePath = path.join(__dirname, 'console.html');
@@ -667,6 +670,7 @@ function serveConsole(req, res) {
     }
     
     html = html.replace(/__ASSET_VERSION__/g, ASSET_VERSION);
+    html = html.replace(/__TURNSTILE_SITE_KEY__/g, TURNSTILE_SITE_KEY);
     
     // Validate the replacement worked
     if (html.includes('__ASSET_VERSION__')) {
@@ -735,6 +739,7 @@ function serveIndex(req, res) {
     }
     
     html = html.replace(/__ASSET_VERSION__/g, ASSET_VERSION);
+    html = html.replace(/__TURNSTILE_SITE_KEY__/g, TURNSTILE_SITE_KEY);
     
     // Validate the replacement worked
     if (html.includes('__ASSET_VERSION__')) {
