@@ -555,15 +555,17 @@ app.use((req, res, next) => {
   // Base CSP policy that allows necessary functionality while restricting dangerous content
   const cspDirectives = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com", // Allow Turnstile scripts
-    "style-src 'self' 'unsafe-inline'", // Allow inline styles for terminal styling
-    "img-src 'self' data: https:", // Allow data URLs and HTTPS images
-    "font-src 'self' data:", // Allow data URLs for fonts
-    "connect-src 'self' ws: wss: https://challenges.cloudflare.com", // Allow WebSocket and Turnstile API
-    "frame-ancestors 'none'", // Prevent clickjacking
-    "base-uri 'self'", // Restrict base tag
-    "form-action 'self'", // Restrict form submissions
-    "upgrade-insecure-requests" // Upgrade HTTP to HTTPS
+    "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://static.cloudflareinsights.com",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com",
+    "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com",
+    "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com",
+    "img-src 'self' data: https:",
+    "connect-src 'self' ws: wss: https://challenges.cloudflare.com https://static.cloudflareinsights.com",
+    "frame-src 'self' https://challenges.cloudflare.com",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "upgrade-insecure-requests"
   ].join('; ');
   
   res.setHeader('Content-Security-Policy', cspDirectives);
