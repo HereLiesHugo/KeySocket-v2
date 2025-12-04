@@ -345,7 +345,10 @@ const sessionStore = new FileStore({
   path: sessionsDir, 
   ttl: 86400, // 24 hours
   retries: 0,
-  reapInterval: 3600000, // Clean up expired sessions every hour (in milliseconds)
+  // Stop endless logging on session file cleanup errors
+  reapInterval: -1, // Clean up expired sessions every hour (in milliseconds)
+  // CHANGE 2: Silence the library's internal logging
+  logFn: function() {},
   secret: process.env.FILESTORE_ENCRYPTION_KEY
 });
 
