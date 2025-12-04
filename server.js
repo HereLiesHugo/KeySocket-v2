@@ -345,7 +345,8 @@ const sessionStore = new FileStore({
   path: sessionsDir, 
   ttl: 86400, // 24 hours
   retries: 0,
-  reapInterval: 3600000 // Clean up expired sessions every hour (in milliseconds)
+  reapInterval: 3600000, // Clean up expired sessions every hour (in milliseconds)
+  secret: process.env.FILESTORE_ENCRYPTION_KEY
 });
 
 // Derive cookie.secure from runtime: if we're terminating TLS at the proxy
@@ -375,7 +376,8 @@ const sessionConfig = {
 logger.info('Session configuration', {
   cookie_secure: sessionConfig.cookie.secure,
   cookie_sameSite: sessionConfig.cookie.sameSite,
-  session_ttl_ms: sessionConfig.cookie.maxAge ? sessionConfig.cookie.maxAge : undefined
+  session_ttl_ms: sessionConfig.cookie.maxAge ? sessionConfig.cookie.maxAge : undefined,
+  store_encrypted: !!process.env.FILESTORE_ENCRYPTION_KEY
 });
 
 // Initialize session middleware first
