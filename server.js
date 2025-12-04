@@ -382,8 +382,8 @@ logger.info('Session configuration', {
 const sessionMiddleware = session(sessionConfig);
 app.use(sessionMiddleware);
 
-console.log(`[Server] Session store type: ${typeof sessionStore}`);
-console.log(`[Server] Session store has get method: ${typeof sessionStore.get}`);
+logger.debug(`[Server] Session store type: ${typeof sessionStore}`);
+logger.debug(`[Server] Session store has get method: ${typeof sessionStore.get}`);
 
 // Clean up expired sessions on startup
 function cleanupExpiredSessions() {
@@ -550,6 +550,54 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
+// Content Security Policy headers
+app.use((req, res, next) => {
+  // Base CSP policy that allows necessary functionality while restricting dangerous content
+  const cspDirectives = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com", // Allow Turnstile scripts
+    "style-src 'self' 'unsafe-inline'", // Allow inline styles for terminal styling
+    "img-src 'self' data: https:", // Allow data URLs and HTTPS images
+    "font-src 'self' data:", // Allow data URLs for fonts
+    "connect-src 'self' ws: wss: https://challenges.cloudflare.com", // Allow WebSocket and Turnstile API
+    "frame-ancestors 'none'", // Prevent clickjacking
+    "base-uri 'self'", // Restrict base tag
+    "form-action 'self'", // Restrict form submissions
+    "upgrade-insecure-requests" // Upgrade HTTP to HTTPS
+  ].join('; ');
+  
+  res.setHeader('Content-Security-Policy', cspDirectives);
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()');
+  
+  next();
+});
+
+// Specific rate limiting for Turnstile verification endpoint (more restrictive)
+const turnstileLimiter = rateLimit({
+  windowMs: parseInt(process.env.TURNSTILE_RATE_WINDOW_MS || '300000', 10), // 5 minutes default
+  max: parseInt(process.env.TURNSTILE_RATE_MAX || '10', 10), // 10 requests per 5 minutes
+  message: { ok: false, message: 'Too many Turnstile verification attempts. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    // Use IP address for rate limiting, but respect proxy headers
+    const ip = getReqRemoteIp(req);
+    return `turnstile:${ip}`;
+  },
+  onLimitReached: (req, res, options) => {
+    logger.warn('Turnstile rate limit exceeded', {
+      ip: getReqRemoteIp(req),
+      user_agent: req.get('User-Agent'),
+      limit: options.max,
+      window_ms: options.windowMs
+    });
+  }
+});
+
 // Serve static frontend
 const publicDir = path.join(__dirname);
 // Serve static files but don't auto-serve index.html so we can inject asset version
@@ -581,11 +629,66 @@ const ASSET_VERSION = process.env.ASSET_VERSION || (() => {
 function serveConsole(req, res) {
   try {
     const consolePath = path.join(__dirname, 'console.html');
+    
+    // Check if file exists before attempting to read
+    if (!fs.existsSync(consolePath)) {
+      logger.error('Console template file not found', { 
+        file_path: consolePath,
+        request_url: req.url,
+        user_agent: req.get('User-Agent'),
+        remote_ip: req.ip || req.connection.remoteAddress
+      });
+      return res.status(404).send('Console page not found');
+    }
+    
+    // Check file permissions
+    try {
+      fs.accessSync(consolePath, fs.constants.R_OK);
+    } catch (accessError) {
+      logger.error('Console template file not readable', { 
+        file_path: consolePath,
+        error: accessError.message,
+        request_url: req.url
+      });
+      return res.status(500).send('Server configuration error');
+    }
+    
     let html = fs.readFileSync(consolePath, 'utf8');
+    
+    // Validate HTML content
+    if (!html || html.length === 0) {
+      logger.error('Console template file is empty', { 
+        file_path: consolePath,
+        request_url: req.url
+      });
+      return res.status(500).send('Server configuration error');
+    }
+    
     html = html.replace(/__ASSET_VERSION__/g, ASSET_VERSION);
+    
+    // Validate the replacement worked
+    if (html.includes('__ASSET_VERSION__')) {
+      logger.warn('Asset version replacement may have failed in console template', {
+        file_path: consolePath,
+        asset_version: ASSET_VERSION
+      });
+    }
+    
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     return res.send(html);
-  } catch (e) {
+    
+  } catch (fileError) {
+    logger.error('Error serving console page', {
+      error: fileError.message,
+      stack: fileError.stack,
+      request_url: req.url,
+      user_agent: req.get('User-Agent'),
+      remote_ip: req.ip || req.connection.remoteAddress,
+      file_path: path.join(__dirname, 'console.html')
+    });
     return res.status(500).send('Server error');
   }
 }
@@ -594,11 +697,66 @@ function serveIndex(req, res) {
   try {
     // Always serve the same HTML - let frontend handle authentication logic
     const indexPath = path.join(__dirname, 'index.html');
+    
+    // Check if file exists before attempting to read
+    if (!fs.existsSync(indexPath)) {
+      logger.error('Index template file not found', { 
+        file_path: indexPath,
+        request_url: req.url,
+        user_agent: req.get('User-Agent'),
+        remote_ip: req.ip || req.connection.remoteAddress
+      });
+      return res.status(404).send('Index page not found');
+    }
+    
+    // Check file permissions
+    try {
+      fs.accessSync(indexPath, fs.constants.R_OK);
+    } catch (accessError) {
+      logger.error('Index template file not readable', { 
+        file_path: indexPath,
+        error: accessError.message,
+        request_url: req.url
+      });
+      return res.status(500).send('Server configuration error');
+    }
+    
     let html = fs.readFileSync(indexPath, 'utf8');
+    
+    // Validate HTML content
+    if (!html || html.length === 0) {
+      logger.error('Index template file is empty', { 
+        file_path: indexPath,
+        request_url: req.url
+      });
+      return res.status(500).send('Server configuration error');
+    }
+    
     html = html.replace(/__ASSET_VERSION__/g, ASSET_VERSION);
+    
+    // Validate the replacement worked
+    if (html.includes('__ASSET_VERSION__')) {
+      logger.warn('Asset version replacement may have failed in index template', {
+        file_path: indexPath,
+        asset_version: ASSET_VERSION
+      });
+    }
+    
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     return res.send(html);
-  } catch (e) {
+    
+  } catch (fileError) {
+    logger.error('Error serving index page', {
+      error: fileError.message,
+      stack: fileError.stack,
+      request_url: req.url,
+      user_agent: req.get('User-Agent'),
+      remote_ip: req.ip || req.connection.remoteAddress,
+      file_path: path.join(__dirname, 'index.html')
+    });
     return res.status(500).send('Server error');
   }
 }
@@ -606,6 +764,7 @@ function serveIndex(req, res) {
 app.get('/', serveIndex);
 app.get('/index.html', serveIndex);
 app.get('/console', serveConsole);
+// ... (rest of the code remains the same)
 app.get('/console.html', serveConsole);
 
 app.get('/health', (req, res) => res.json({ ok: true, env: process.env.NODE_ENV || 'development' }));
@@ -614,14 +773,14 @@ app.get('/health', (req, res) => res.json({ ok: true, env: process.env.NODE_ENV 
 // Fully Moved to nginx
 
 // Turnstile verification endpoint - accepts a client token and verifies with Cloudflare
-app.post('/turnstile-verify', (req, res) => {
-  console.log('[Turnstile] Received verification request');
-  console.log('[Turnstile] Request headers:', req.headers);
-  console.log('[Turnstile] Request body:', req.body);
+app.post('/turnstile-verify', turnstileLimiter, (req, res) => {
+  logger.debug('[Turnstile] Received verification request');
+  logger.debug('[Turnstile] Request headers:', { headers: req.headers });
+  logger.debug('[Turnstile] Request body:', { body: req.body });
   const token = (req.body && req.body.token) || '';
   if (!token) return res.status(400).json({ ok: false, message: 'missing token' });
   if (!TURNSTILE_SECRET) {
-    console.error('TURNSTILE_SECRET not configured in environment');
+    logger.error('TURNSTILE_SECRET not configured in environment');
     return res.status(500).json({ ok: false, message: 'server misconfigured: TURNSTILE_SECRET not set' });
   }
 
@@ -896,6 +1055,75 @@ function decrIp(ip) {
 
 function safeParseJson(message) {
   try { return JSON.parse(message); } catch (e) { return null; }
+}
+
+function consumeVerifiedToken(token, remoteIp) {
+  try {
+    // Validate token format
+    if (!token || typeof token !== 'string' || token.length !== 48) {
+      logger.warn('Invalid Turnstile token format', { 
+        token_length: token ? token.length : 0,
+        remote_ip: remoteIp 
+      });
+      return false;
+    }
+
+    // Iterate through all active sessions to find matching token
+    for (const [sessionId, sessionData] of Object.entries(sessionStore.sessions || {})) {
+      try {
+        const session = typeof sessionData === 'string' ? JSON.parse(sessionData) : sessionData;
+        
+        if (session && 
+            session.turnstileToken === token && 
+            session.turnstileTokenExpires &&
+            session.turnstileTokenExpires > Date.now() &&
+            session.turnstileVerifiedIP === remoteIp) {
+          
+          // Token found and valid - consume it by clearing from session
+          session.turnstileToken = null;
+          session.turnstileTokenExpires = null;
+          
+          // Update session store
+          if (sessionStore && typeof sessionStore.set === 'function') {
+            sessionStore.set(sessionId, session, (err) => {
+              if (err) {
+                logger.warn('Failed to update session after token consumption', {
+                  session_id: sessionId,
+                  error: err.message
+                });
+              }
+            });
+          }
+          
+          logger.info('Turnstile token consumed successfully', {
+            session_id: sessionId,
+            remote_ip: remoteIp
+          });
+          
+          return true;
+        }
+      } catch (parseError) {
+        logger.debug('Failed to parse session data during token validation', {
+          session_id: sessionId,
+          error: parseError.message
+        });
+        continue;
+      }
+    }
+    
+    logger.warn('Turnstile token not found or expired', {
+      remote_ip: remoteIp,
+      token_prefix: token ? token.substring(0, 8) + '...' : 'null'
+    });
+    
+    return false;
+  } catch (error) {
+    logger.error('Error during Turnstile token consumption', {
+      error: error.message,
+      remote_ip: remoteIp
+    });
+    return false;
+  }
 }
 
 // SSH brute-force protection functions
@@ -1208,7 +1436,7 @@ wss.on('connection', (ws, req) => {
     user_name: sessionData.user.name
   });
 
-  console.log(`[WebSocket] New SSH connection from ${ip} for user ${sessionData.user.email} (${sessionData.user.name})`);
+  logger.info(`[WebSocket] New SSH connection from ${ip} for user ${sessionData.user.email} (${sessionData.user.name})`);
 
   const concurrent = incrIp(ip);
   if (concurrent > CONCURRENT_PER_IP) {
@@ -1237,7 +1465,7 @@ wss.on('connection', (ws, req) => {
       const parsed = safeParseJson(msg.toString());
       if (!parsed) return;
       if (parsed.type === 'connect') {
-        const { host, port, username, auth, token } = parsed;
+        const { host, port, username, auth, token, password, privateKey, passphrase } = parsed;
         const userId = sessionData.user.id || sessionData.user.email;
         
         // Verify Turnstile token from session
@@ -1296,9 +1524,55 @@ wss.on('connection', (ws, req) => {
           return;
         }
         
-        // Basic validation
-        if (!host || !username) {
-          ws.send(JSON.stringify({ type: 'error', message: 'Missing host or username' }));
+        // Validate all SSH connection parameters
+        const hostValidation = validateSshHost(host);
+        if (!hostValidation.valid) {
+          logger.warn('SSH connection blocked - invalid host', {
+            user_email: sessionData.user.email,
+            source_ip: ip,
+            host: host,
+            error: hostValidation.error
+          });
+          ws.send(JSON.stringify({ type: 'error', message: hostValidation.error }));
+          ws.close();
+          return;
+        }
+        
+        const portValidation = validateSshPort(port);
+        if (!portValidation.valid) {
+          logger.warn('SSH connection blocked - invalid port', {
+            user_email: sessionData.user.email,
+            source_ip: ip,
+            port: port,
+            error: portValidation.error
+          });
+          ws.send(JSON.stringify({ type: 'error', message: portValidation.error }));
+          ws.close();
+          return;
+        }
+        
+        const usernameValidation = validateSshUsername(username);
+        if (!usernameValidation.valid) {
+          logger.warn('SSH connection blocked - invalid username', {
+            user_email: sessionData.user.email,
+            source_ip: ip,
+            username: username,
+            error: usernameValidation.error
+          });
+          ws.send(JSON.stringify({ type: 'error', message: usernameValidation.error }));
+          ws.close();
+          return;
+        }
+        
+        const authValidation = validateSshAuth(auth, password, privateKey, passphrase);
+        if (!authValidation.valid) {
+          logger.warn('SSH connection blocked - invalid auth parameters', {
+            user_email: sessionData.user.email,
+            source_ip: ip,
+            auth: auth,
+            error: authValidation.error
+          });
+          ws.send(JSON.stringify({ type: 'error', message: authValidation.error }));
           ws.close();
           return;
         }
@@ -1319,7 +1593,7 @@ wss.on('connection', (ws, req) => {
             error: error.message,
             source_ip: ip,
             user_email: sessionData.user.email,
-            port: port || 22,
+            port: portValidation.value || 22,
             username: username
           });
 
@@ -1332,7 +1606,7 @@ wss.on('connection', (ws, req) => {
         logger.info('SSH connection attempt', {
           target_host: host,
           target_ip: targetAddress, // Log the actual IP
-          target_port: port || 22,
+          target_port: portValidation.value || 22,
           username: username,
           auth_type: auth,
           source_ip: ip,
@@ -1345,15 +1619,15 @@ wss.on('connection', (ws, req) => {
         const connectionStartTime = Date.now();
         const connectOpts = {
           host: targetAddress, // 3. IMPORTANT: Connect to the VALIDATED IP, not the hostname
-          port: parseInt(port || '22', 10),
+          port: portValidation.value || 22,
           username: username,
           readyTimeout: 20000,
           algorithms: { // keep defaults but allow modern servers
           }
         };
-        if (auth === 'password') connectOpts.password = parsed.password;
-        else if (auth === 'key') connectOpts.privateKey = parsed.privateKey || parsed.key;
-        if (parsed.passphrase) connectOpts.passphrase = parsed.passphrase;
+        if (auth === 'password') connectOpts.password = password;
+        else if (auth === 'key') connectOpts.privateKey = privateKey;
+        if (passphrase) connectOpts.passphrase = passphrase;
 
         // Optional: restrict destinations in production via env (should be IPs/CIDRs)
         const allowed = process.env.ALLOWED_HOSTS; // comma separated IPs or CIDRs
@@ -1401,7 +1675,7 @@ wss.on('connection', (ws, req) => {
           
           logger.error('SSH connection error', {
             target_host: host,
-            target_port: port || 22,
+            target_port: portValidation.value || 22,
             username: username,
             source_ip: ip,
             user_email: sessionData.user.email,
@@ -1418,7 +1692,7 @@ wss.on('connection', (ws, req) => {
         sshClient.on('end', () => {
           logger.info('SSH connection ended', {
             target_host: host,
-            target_port: port || 22,
+            target_port: portValidation.value || 22,
             username: username,
             source_ip: ip,
             user_email: sessionData.user.email
@@ -1428,7 +1702,7 @@ wss.on('connection', (ws, req) => {
         sshClient.on('close', () => {
           logger.info('SSH connection closed', {
             target_host: host,
-            target_port: port || 22,
+            target_port: portValidation.value || 22,
             username: username,
             source_ip: ip,
             user_email: sessionData.user.email
@@ -1491,12 +1765,13 @@ server.listen(PORT, HOST, () => {
     log_level: logLevel
   });
 
-  console.log(`\n🚀 KeySocket Server listening on ${HOST}:${PORT}`);
-  console.log(`📝 Logs: ${logFile}`);
-  console.log(`🔐 Authentication: Google OAuth + Turnstile`);
-  console.log(`🛡️  SSRF Protection: Enabled (DNS Resolution + IP Validation)`);
-  console.log(`💾 Session Storage: FileStore (${sessionsDir})`);
-  console.log(`🗑️  Session Cleanup: Every 6 hours (24h TTL)\n`);
+  logger.info(`KeySocket Server listening on ${HOST}:${PORT}`);
+  logger.info(`Logs: ${logFile}`);
+  logger.info(`Authentication: Google OAuth + Turnstile`);
+  logger.info(`SSRF Protection: Enabled (DNS Resolution + IP Validation)`);
+  logger.info(`Session Storage: FileStore (${sessionsDir})`);
+  logger.info(`Session Cleanup: Every 6 hours (24h TTL)`);
+
 });
 
 // graceful shutdown: close websockets, end SSH clients, then close HTTP server
