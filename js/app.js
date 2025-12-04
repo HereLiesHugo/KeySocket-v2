@@ -61,7 +61,7 @@
                 try {
                     if (fit && typeof fit.fit === 'function') term.loadAddon(fit);
                 } catch (e) {
-                    // ignore addon load errors
+                    /* ignore addon load errors */
                 }
             }
 
@@ -69,8 +69,10 @@
                 try {
                     term.loadAddon(new (WebglAddon.WebglAddon || WebglAddon)());
                 } catch (e) {
-                    // WebGL addon is optional, fail silently
+                    console.error('WebGL addon failed to load', e);
                 }
+            } else {
+                console.error('WebGL addon not found');
             }
 
             try {
@@ -218,14 +220,13 @@
                 <div class="keyboard-row">
                     ${row.map(key => {
                         const displayChar = state.shift ? (key.shiftKey || key.key.toUpperCase()) : key.key;
-                        const keyChar = escapeHtml(key.key);
-                        const shiftChar = escapeHtml(key.shiftKey || key.key.toUpperCase());
+                        const keyChar = key.key;
+                        const shiftChar = key.shiftKey || key.key.toUpperCase();
                         const flex = key.flex || 1;
                         let className = 'keyboard-key';
                         if (key.modifier && (state.shift || state.ctrl)) className += ' keyboard-key--active';
-                        const displayCharEscaped = escapeHtml(displayChar);
 
-                        return `<button class="${className}" style="flex-grow: ${flex}" data-code="${escapeHtml(key.code)}" data-key="${keyChar}" data-shift-key="${shiftChar}">${displayCharEscaped}</button>`;
+                        return `<button class="${className}" style="flex-grow: ${flex}" data-code="${key.code}" data-key="${keyChar}" data-shift-key="${shiftChar}">${displayChar}</button>`;
                     }).join('')}
                 </div>
             `).join('');
@@ -239,6 +240,7 @@
 
     function fallbackTerminal() {
         // graceful fallback: create a minimal stub so rest of UI doesn't crash
+        console.error('xterm Terminal constructor not found on window');
         term = {
             write: (s) => { if (termEl) termEl.textContent += s; },
             writeln: (s) => { if (termEl) termEl.textContent += s + '\n'; },
@@ -340,9 +342,7 @@
     function toggleFullscreen() {
         if (!document.fullscreenElement) {
             if (terminalArea && terminalArea.requestFullscreen) {
-                terminalArea.requestFullscreen().catch(() => {
-                    // Silently handle fullscreen request failures
-                });
+                terminalArea.requestFullscreen().catch(err => console.error('Fullscreen request failed:', err));
             }
             if (fullscreenBtn) fullscreenBtn.textContent = '⛶ Exit Fullscreen';
         } else {
@@ -387,13 +387,6 @@
         localStorage.setItem('ks_connections', JSON.stringify(list.slice(0, 20)));
     }
 
-    // HTML escaping utility to prevent XSS
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
     function renderAppManagementConnections(list) {
         if (!appManagementConnectionsList) return;
         if (!list || !list.length) {
@@ -401,10 +394,10 @@
             return;
         }
         appManagementConnectionsList.innerHTML = list.map((c, i) => {
-            const host = escapeHtml(c.host || '');
-            const port = escapeHtml(c.port || '22');
-            const username = escapeHtml(c.username || '');
-            const auth = escapeHtml(c.auth || 'password');
+            const host = c.host || '';
+            const port = c.port || '22';
+            const username = c.username || '';
+            const auth = c.auth || 'password';
             const main = (username ? (username + '@') : '') + host + ':' + port;
             const sub = auth === 'password' ? 'Password auth' : 'Private key auth';
             return '<div class="connection-item" data-index="' + i + '">' +
@@ -437,13 +430,7 @@
     function loadSaved() {
         const list = getConnections();
         if (!savedList) return;
-        savedList.innerHTML = '<option value="">Saved connections</option>' + list.map((c, i) => {
-            const username = escapeHtml(c.username || '');
-            const host = escapeHtml(c.host || '');
-            const port = escapeHtml(c.port || '22');
-            const auth = escapeHtml(c.auth || 'password');
-            return ` <option value="${i}">${username}@${host}:${port} (${auth})</option>`;
-        }).join('\n');
+        savedList.innerHTML = '<option value="">Saved connections</option>' + list.map((c, i) => ` <option value="${i}">${c.username}@${c.host}:${c.port} (${c.auth})</option>`).join('\n');
         renderAppManagementConnections(list);
     }
     loadSaved();
@@ -784,6 +771,7 @@
 
         socket.addEventListener('error', (err) => {
             try { term.writeln('\r\n[Socket error]'); } catch (e) {}
+            console.error('ws error', err);
             
             // Check if this is an authentication error
             const errorMessage = err.message || '';
@@ -965,7 +953,7 @@
             if (window.turnstile) {
                 try {
                     widgetEl.innerHTML = '';
-                    ksTurnstileWidgetId = window.turnstile.render('#turnstile-widget', { sitekey: '__TURNSTILE_SITE_KEY__', callback: onTurnstileToken });
+                    ksTurnstileWidgetId = window.turnstile.render('#turnstile-widget', { sitekey: '0x4AAAAAACDdgapByiL54XqC', callback: onTurnstileToken });
                     ksTurnstileRendered = true;
                     if (widgetEl.dataset) widgetEl.dataset.turnstileRendered = '1';
                 } catch (e) {
@@ -993,24 +981,13 @@
         if (ov) ov.style.display = 'flex';
         try {
             if (window.turnstile) {
-                const widgetEl = document.getElementById('turnstile-widget');
-                if (widgetEl) {
-                    // Clear the widget completely
-                    widgetEl.innerHTML = '';
-                    widgetEl.dataset.turnstileRendered = '0';
-                    ksTurnstileWidgetId = null;
-                    ksTurnstileRendered = false;
-                    
-                    // Render fresh widget
-                    ksTurnstileWidgetId = window.turnstile.render('#turnstile-widget', { 
-                        sitekey: '__TURNSTILE_SITE_KEY__', 
-                        callback: onTurnstileToken 
-                    });
-                    ksTurnstileRendered = true;
-                    if (widgetEl.dataset) widgetEl.dataset.turnstileRendered = '1';
+                if (ksTurnstileWidgetId) {
+                    try { window.turnstile.reset(ksTurnstileWidgetId); } catch (e) { ksTurnstileWidgetId = window.turnstile.render('#turnstile-widget', { sitekey: '0x4AAAAAACDdgapByiL54XqC', callback: onTurnstileToken }); }
+                } else {
+                    ksTurnstileWidgetId = window.turnstile.render('#turnstile-widget', { sitekey: '0x4AAAAAACDdgapByiL54XqC', callback: onTurnstileToken });
                 }
             }
-        } catch (e) { /* ignore errors */ }
+        } catch (e) { console.error('reRunTurnstile', e); }
     }
 
     // Show a lightweight banner based on ?auth=success|failure|already using static DOM + CSS
