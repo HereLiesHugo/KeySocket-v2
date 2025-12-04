@@ -11,6 +11,7 @@ const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const { WebSocketServer } = require('ws');
 const https = require('https');
+
 const http = require('http');
 const { Client } = require('ssh2');
 const { URL } = require('url');
@@ -19,6 +20,9 @@ const cookieParser = require('cookie-parser');
 const dns = require('dns').promises; // ADDED: Required for SSRF fix
 const crypto = require('crypto');
 const EventEmitter = require('events');
+
+// Session FileStore - required before EncryptedFileStore
+const FileStore = require('session-file-store')(session);
 
 // Enhanced logging system
 const logFile = path.join(__dirname, 'server.log');
@@ -489,7 +493,6 @@ function parseWebSocketSession(req, callback) {
 }
 
 // Session configuration (reusable for Express and WebSocket)
-const FileStore = require('session-file-store')(session);
 
 // Ensure sessions directory exists
 const sessionsDir = path.join(__dirname, 'sessions');
