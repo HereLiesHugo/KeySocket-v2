@@ -17,6 +17,57 @@ const { URL } = require('url');
 const cookie = require('cookie');
 const cookieParser = require('cookie-parser');
 const dns = require('dns').promises; // ADDED: Required for SSRF fix
+const crypto = require('crypto');
+const EventEmitter = require('events');
+
+// Encryption utilities
+function validateEncryptionKey(key) {
+  if (!key) {
+    throw new Error('FILESTORE_ENCRYPTION_KEY is required in .env');
+  }
+  
+  try {
+    const keyBuffer = Buffer.from(key, 'base64');
+    if (keyBuffer.length !== 32) {
+      throw new Error('FILESTORE_ENCRYPTION_KEY must be a 32-byte base64 string');
+    }
+    return keyBuffer;
+  } catch (error) {
+    throw new Error(`Invalid FILESTORE_ENCRYPTION_KEY: ${error.message}`);
+  }
+}
+
+function encrypt(text, key) {
+  const iv = crypto.randomBytes(12); // 12 bytes for GCM
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv, { authTagLength: 16 });
+  const encrypted = Buffer.concat([cipher.update(text, 'utf8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  
+  // Combine IV + tag + encrypted data
+  return Buffer.concat([iv, tag, encrypted]).toString('base64');
+}
+
+function decrypt(encrypted, key) {
+  try {
+    const data = Buffer.from(encrypted, 'base64');
+    const iv = data.slice(0, 12);
+    const tag = data.slice(12, 28);
+    const encryptedData = data.slice(28);
+    
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv, { authTagLength: 16 });
+    decipher.setAuthTag(tag);
+    
+    const decrypted = Buffer.concat([
+      decipher.update(encryptedData),
+      decipher.final()
+    ]);
+    
+    return decrypted.toString('utf8');
+  } catch (error) {
+    logger.error('Decryption failed', { error: error.message });
+    throw new Error('Failed to decrypt data');
+  }
+}
 
 // Enhanced logging system
 const logFile = path.join(__dirname, 'server.log');
@@ -331,8 +382,102 @@ function parseWebSocketSession(req, callback) {
   }
 }
 
-// Session configuration (reusable for Express and WebSocket)
-const FileStore = require('session-file-store')(session);
+/**
+ * EncryptedFileStore wraps a FileStore to provide transparent encryption/decryption
+ * of session data at rest.
+ */
+class EncryptedFileStore extends EventEmitter {
+  constructor(options) {
+    super();
+    
+    if (!process.env.FILESTORE_ENCRYPTION_KEY) {
+      throw new Error('FILESTORE_ENCRYPTION_KEY environment variable is required');
+    }
+    
+    this.encryptionKey = validateEncryptionKey(process.env.FILESTORE_ENCRYPTION_KEY);
+    this.fileStore = new FileStore(options);
+    
+    // Proxy all FileStore events
+    this.fileStore.on('disconnect', () => this.emit('disconnect'));
+    this.fileStore.on('connect', () => this.emit('connect'));
+    this.fileStore.on('create', (sid) => this.emit('create', sid));
+    this.fileStore.on('update', (sid) => this.emit('update', sid));
+    this.fileStore.on('destroy', (sid) => this.emit('destroy', sid));
+  }
+  
+  get(sid, callback) {
+    this.fileStore.get(sid, (err, session) => {
+      if (err) return callback(err);
+      if (!session) return callback(null, null);
+      
+      try {
+        // If session data is encrypted, decrypt it
+        if (typeof session === 'string' && session.startsWith('enc:')) {
+          const encryptedData = session.slice(4); // Remove 'enc:' prefix
+          const decryptedSession = JSON.parse(decrypt(encryptedData, this.encryptionKey));
+          return callback(null, decryptedSession);
+        }
+        
+        // Legacy: handle non-encrypted sessions for migration
+        if (typeof session === 'object' && session !== null) {
+          return callback(null, session);
+        }
+        
+        // If we get here, the session data is corrupted or invalid
+        logger.warn('Invalid session data format, treating as expired', { 
+          session_id: sid,
+          data_type: typeof session
+        });
+        return callback(null, null);
+      } catch (decryptError) {
+        logger.warn('Failed to decrypt session, treating as expired', { 
+          session_id: sid, 
+          error: decryptError.message 
+        });
+        // Don't return the error, just treat as expired session
+        return callback(null, null);
+      }
+    });
+  }
+  
+  set(sid, session, callback) {
+    try {
+      // Encrypt the session data before storing
+      const sessionString = JSON.stringify(session);
+      const encrypted = 'enc:' + encrypt(sessionString, this.encryptionKey);
+      
+      // Store the encrypted data
+      this.fileStore.set(sid, encrypted, callback);
+    } catch (error) {
+      logger.error('Failed to encrypt session', { 
+        session_id: sid, 
+        error: error.message 
+      });
+      return callback(error);
+    }
+  }
+  
+  // Proxy all other methods directly to the file store
+  destroy(sid, callback) {
+    return this.fileStore.destroy(sid, callback);
+  }
+  
+  all(callback) {
+    return this.fileStore.all(callback);
+  }
+  
+  length(callback) {
+    return this.fileStore.length(callback);
+  }
+  
+  clear(callback) {
+    return this.fileStore.clear(callback);
+  }
+  
+  touch(sid, session, callback) {
+    return this.fileStore.touch(sid, session, callback);
+  }
+}
 
 // Ensure sessions directory exists
 const sessionsDir = path.join(__dirname, 'sessions');
@@ -340,13 +485,30 @@ if (!fs.existsSync(sessionsDir)) {
   fs.mkdirSync(sessionsDir, { recursive: true });
 }
 
-// Create session store explicitly
-const sessionStore = new FileStore({ 
-  path: sessionsDir, 
-  ttl: 86400, // 24 hours
-  retries: 0,
-  reapInterval: 3600000 // Clean up expired sessions every hour (in milliseconds)
-});
+// Create encrypted session store
+let sessionStore;
+try {
+  if (process.env.FILESTORE_ENCRYPTION_KEY) {
+    logger.info('Using encrypted session store');
+    sessionStore = new EncryptedFileStore({
+      path: sessionsDir,
+      ttl: 86400, // 24 hours
+      retries: 0,
+      reapInterval: 3600000 // Clean up expired sessions every hour (in milliseconds)
+    });
+  } else {
+    logger.warn('FILESTORE_ENCRYPTION_KEY not set, using unencrypted session store');
+    sessionStore = new FileStore({
+      path: sessionsDir,
+      ttl: 86400,
+      retries: 0,
+      reapInterval: 3600000
+    });
+  }
+} catch (error) {
+  logger.error('Failed to initialize session store', { error: error.message });
+  process.exit(1);
+}
 
 // Derive cookie.secure from runtime: if we're terminating TLS at the proxy
 // or running TLS in-process, mark cookies as Secure. Allow overriding sameSite via env.
