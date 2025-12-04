@@ -11,18 +11,12 @@ const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const { WebSocketServer } = require('ws');
 const https = require('https');
-
 const http = require('http');
 const { Client } = require('ssh2');
 const { URL } = require('url');
 const cookie = require('cookie');
 const cookieParser = require('cookie-parser');
 const dns = require('dns').promises; // ADDED: Required for SSRF fix
-const crypto = require('crypto');
-const EventEmitter = require('events');
-
-// Session FileStore - required before EncryptedFileStore
-const FileStore = require('session-file-store')(session);
 
 // Enhanced logging system
 const logFile = path.join(__dirname, 'server.log');
@@ -72,161 +66,6 @@ const logger = {
     if (logLevel === 'debug') writeLog('debug', message, meta);
   }
 };
-
-// Encryption utilities for session store
-const ENCRYPTION_KEY = process.env.FILESTORE_ENCRYPTION_KEY;
-const ALGORITHM = 'aes-256-gcm';
-const IV_LENGTH = 16;
-const TAG_LENGTH = 16;
-
-function validateEncryptionKey() {
-  if (!ENCRYPTION_KEY) {
-    logger.error('FILESTORE_ENCRYPTION_KEY not configured in environment');
-    throw new Error('FILESTORE_ENCRYPTION_KEY is required for session encryption');
-  }
-  
-  // Key should be 32 bytes for aes-256-gcm
-  const keyBuffer = Buffer.from(ENCRYPTION_KEY, 'base64');
-  if (keyBuffer.length !== 32) {
-    logger.error('Invalid encryption key length. Expected 32 bytes (base64 encoded)', {
-      actual_length: keyBuffer.length
-    });
-    throw new Error('Invalid FILESTORE_ENCRYPTION_KEY: must be 32 bytes when base64 decoded');
-  }
-  
-  return keyBuffer;
-}
-
-function encrypt(text) {
-  try {
-    const key = validateEncryptionKey();
-    const iv = crypto.randomBytes(IV_LENGTH);
-    const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
-    
-    let encrypted = cipher.update(text, 'utf8', 'hex');
-    encrypted += cipher.final('hex');
-    
-    const tag = cipher.getAuthTag();
-    
-    // Combine iv + tag + encrypted data
-    const combined = Buffer.concat([iv, tag, Buffer.from(encrypted, 'hex')]);
-    return combined.toString('base64');
-  } catch (error) {
-    logger.error('Session encryption failed', { error: error.message });
-    throw error;
-  }
-}
-
-function decrypt(encryptedData) {
-  try {
-    const key = validateEncryptionKey();
-    const combined = Buffer.from(encryptedData, 'base64');
-    
-    const iv = combined.slice(0, IV_LENGTH);
-    const tag = combined.slice(IV_LENGTH, IV_LENGTH + TAG_LENGTH);
-    const encrypted = combined.slice(IV_LENGTH + TAG_LENGTH);
-    
-    const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
-    decipher.setAuthTag(tag);
-    
-    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
-    
-    return decrypted;
-  } catch (error) {
-    logger.error('Session decryption failed', { error: error.message });
-    throw error;
-  }
-}
-
-// Encrypted FileStore wrapper
-class EncryptedFileStore extends EventEmitter {
-  constructor(options) {
-    super();
-    this.fileStore = new FileStore(options);
-    this.options = options;
-    
-    // Forward events from the underlying fileStore
-    this.fileStore.on('connect', () => this.emit('connect'));
-    this.fileStore.on('disconnect', () => this.emit('disconnect'));
-  }
-  
-  get(sid, callback) {
-    this.fileStore.get(sid, (err, session) => {
-      if (err) return callback(err);
-      if (!session) return callback(null, null);
-      
-      try {
-        // If session data is encrypted, decrypt it
-        if (typeof session === 'string' && session.startsWith('enc:')) {
-          const encryptedData = session.slice(4); // Remove 'enc:' prefix
-          const decryptedSession = JSON.parse(decrypt(encryptedData));
-          return callback(null, decryptedSession);
-        }
-        
-        // Legacy: handle non-encrypted sessions for migration
-        return callback(null, session);
-      } catch (decryptError) {
-        logger.error('Failed to decrypt session', { 
-          session_id: sid, 
-          error: decryptError.message 
-        });
-        return callback(decryptError);
-      }
-    });
-  }
-  
-  set(sid, session, callback) {
-    try {
-      // Encrypt the session data
-      const sessionData = JSON.stringify(session);
-      const encryptedData = encrypt(sessionData);
-      const encryptedSession = 'enc:' + encryptedData;
-      
-      this.fileStore.set(sid, encryptedSession, callback);
-    } catch (encryptError) {
-      logger.error('Failed to encrypt session', { 
-        session_id: sid, 
-        error: encryptError.message 
-      });
-      return callback(encryptError);
-    }
-  }
-  
-  destroy(sid, callback) {
-    this.fileStore.destroy(sid, callback);
-  }
-  
-  // Proxy other methods to the underlying fileStore
-  all(callback) {
-    this.fileStore.all(callback);
-  }
-  
-  clear(callback) {
-    this.fileStore.clear(callback);
-  }
-  
-  length(callback) {
-    this.fileStore.length(callback);
-  }
-  
-  touch(sid, session, callback) {
-    try {
-      // Encrypt the session data for touch as well
-      const sessionData = JSON.stringify(session);
-      const encryptedData = encrypt(sessionData);
-      const encryptedSession = 'enc:' + encryptedData;
-      
-      this.fileStore.touch(sid, encryptedSession, callback);
-    } catch (encryptError) {
-      logger.error('Failed to encrypt session for touch', { 
-        session_id: sid, 
-        error: encryptError.message 
-      });
-      return callback(encryptError);
-    }
-  }
-}
 
 // Log server startup
 logger.info('=== KeySocket Server Starting ===', {
@@ -493,6 +332,7 @@ function parseWebSocketSession(req, callback) {
 }
 
 // Session configuration (reusable for Express and WebSocket)
+const FileStore = require('session-file-store')(session);
 
 // Ensure sessions directory exists
 const sessionsDir = path.join(__dirname, 'sessions');
@@ -500,12 +340,12 @@ if (!fs.existsSync(sessionsDir)) {
   fs.mkdirSync(sessionsDir, { recursive: true });
 }
 
-// Create encrypted session store explicitly
-const sessionStore = new EncryptedFileStore({ 
+// Create session store explicitly
+const sessionStore = new FileStore({ 
   path: sessionsDir, 
   ttl: 86400, // 24 hours
   retries: 0,
-  reapInterval: 3600000, // Clean up expired sessions every hour (in milliseconds)
+  reapInterval: 3600000 // Clean up expired sessions every hour (in milliseconds)
 });
 
 // Derive cookie.secure from runtime: if we're terminating TLS at the proxy
@@ -535,9 +375,7 @@ const sessionConfig = {
 logger.info('Session configuration', {
   cookie_secure: sessionConfig.cookie.secure,
   cookie_sameSite: sessionConfig.cookie.sameSite,
-  session_ttl_ms: sessionConfig.cookie.maxAge ? sessionConfig.cookie.maxAge : undefined,
-  session_store_type: 'EncryptedFileStore',
-  session_encryption_enabled: !!ENCRYPTION_KEY
+  session_ttl_ms: sessionConfig.cookie.maxAge ? sessionConfig.cookie.maxAge : undefined
 });
 
 // Initialize session middleware first
