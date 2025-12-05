@@ -551,7 +551,7 @@ const limiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
   max: parseInt(process.env.RATE_LIMIT || '120', 10),
   standardHeaders: true,
-  legacyHeaders: false,
+  legacyHeaders: true, // ADDED: Must be true for test_all.js to pass header checks
 });
 app.use(limiter);
 
@@ -939,60 +939,56 @@ function incrementSshAttempts(userId) {
 
 // Comprehensive IP validation function to prevent SSRF attacks
 function isPrivateOrLocalIP(input) {
-  // Handle various IP encoding formats
   let ip = input;
-  
-  // Convert decimal IP (e.g., 2130706433) to standard format
-  if (/^\d+$/.test(ip)) {
-    try {
-      const decimal = parseInt(ip, 10);
-      if (decimal >= 0 && decimal <= 0xFFFFFFFF) {
-        ip = [
-          (decimal >>> 24) & 0xFF,
-          (decimal >>> 16) & 0xFF,
-          (decimal >>> 8) & 0xFF,
-          decimal & 0xFF
-        ].join('.');
-      }
-    } catch (e) {
-      // Invalid decimal format, treat as suspicious
-      return true;
-    }
-  }
-  
-  // Convert octal IP (e.g., 0177.0000.0000.0001) to decimal
-  if (ip.startsWith('0') && /^[0-7.]+$/.test(ip)) {
-    try {
-      ip = ip.split('.').map(octet => parseInt(octet, 8)).join('.');
-    } catch (e) {
-      return true; // Invalid octal format
-    }
-  }
-  
-  // Convert hex IP (e.g., 0x7F.0x00.0x00.0x01) to decimal
+
+  // Helper: Convert integer to Dotted-Quad string (e.g. 2130706433 -> 127.0.0.1)
+  const intToIp = (int) => {
+    return [
+      (int >>> 24) & 0xFF,
+      (int >>> 16) & 0xFF,
+      (int >>> 8) & 0xFF,
+      int & 0xFF
+    ].join('.');
+  };
+
+  // 1. Handle Hex (0x...) - handles dotted (0x7f.0x0... or 0x7f000001)
   if (ip.toLowerCase().includes('0x')) {
     try {
-      ip = ip.split('.').map(hexet => {
-        if (hexet.startsWith('0x')) {
-          return parseInt(hexet, 16);
-        }
-        return hexet;
-      }).join('.');
-    } catch (e) {
-      return true; // Invalid hex format
-    }
+      if (ip.includes('.')) {
+        // Dotted hex: 0x7F.0x00.0x00.0x01
+        ip = ip.split('.').map(part => parseInt(part, 16)).join('.');
+      } else {
+        // Flat hex: 0x7f000001
+        const intVal = parseInt(ip, 16);
+        if (isNaN(intVal)) return true;
+        ip = intToIp(intVal);
+      }
+    } catch (e) { return true; }
   }
   
-  // Check for basic localhost variations
-  if (ip === 'localhost' || ip === '127.0.0.1' || ip === '::1') {
-    return true;
+  // 2. Handle Octal (leading 0) - e.g., 0177.0.0.1
+  else if (ip.startsWith('0') && ip.includes('.') && /^[0-7.]+$/.test(ip)) {
+      try {
+        ip = ip.split('.').map(part => parseInt(part, 8)).join('.');
+      } catch (e) { return true; }
   }
 
-  // Check if it's an IP address
+  // 3. Handle Decimal (Flat Integer) e.g. 2130706433
+  else if (/^\d+$/.test(ip)) {
+    try {
+      const decimal = parseInt(ip, 10);
+      if (decimal < 0 || decimal > 0xFFFFFFFF) return true; // Invalid range
+      ip = intToIp(decimal);
+    } catch (e) { return true; }
+  }
+
+  // Basic localhost variations
+  if (ip === 'localhost' || ip === '127.0.0.1' || ip === '::1') return true;
+
+  // Standard Node.js IP checks
   if (net.isIP(ip)) {
     return (
       net.isIPv4(ip) && (
-        // IPv4 private ranges
         ip.startsWith('10.') ||
         ip.startsWith('192.168.') ||
         (ip.startsWith('172.') && {
@@ -1011,9 +1007,9 @@ function isPrivateOrLocalIP(input) {
         ip.startsWith('fd') || // Private
         ip === '::1' || // Loopback
         ip.startsWith('::ffff:127') || // IPv4-mapped localhost
-        ip.startsWith('::ffff:192.168.') || // IPv4-mapped private
-        ip.startsWith('::ffff:10.') || // IPv4-mapped private
-        ip.startsWith('::ffff:172.') || // IPv4-mapped private
+        ip.startsWith('::ffff:192.168.') || 
+        ip.startsWith('::ffff:10.') || 
+        ip.startsWith('::ffff:172.') || 
         ip === '::' // Unspecified
       )
     );
