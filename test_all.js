@@ -47,39 +47,84 @@ async function runTest(name, testFn) {
 // without needing a live Google Session.
 
 const ssrfLogic = {
+  // UPDATED: Matches the fixed logic in server.js
   isPrivateOrLocalIP: function(input) {
     let ip = input;
-    // (Logic copied from server.js for validation)
-    if (/^\d+$/.test(ip)) {
+
+    // Helper: Convert integer to Dotted-Quad string (e.g. 2130706433 -> 127.0.0.1)
+    const intToIp = (int) => {
+      return [
+        (int >>> 24) & 0xFF,
+        (int >>> 16) & 0xFF,
+        (int >>> 8) & 0xFF,
+        int & 0xFF
+      ].join('.');
+    };
+
+    // 1. Handle Hex (0x...) - handles dotted (0x7f.0x0... or 0x7f000001)
+    if (ip.toLowerCase().includes('0x')) {
       try {
-        const decimal = parseInt(ip, 10);
-        if (decimal >= 0 && decimal <= 0xFFFFFFFF) {
-          ip = [(decimal >>> 24) & 0xFF, (decimal >>> 16) & 0xFF, (decimal >>> 8) & 0xFF, decimal & 0xFF].join('.');
+        if (ip.includes('.')) {
+          // Dotted hex: 0x7F.0x00.0x00.0x01
+          ip = ip.split('.').map(part => parseInt(part, 16)).join('.');
+        } else {
+          // Flat hex: 0x7f000001
+          const intVal = parseInt(ip, 16);
+          if (isNaN(intVal)) return true;
+          ip = intToIp(intVal);
         }
       } catch (e) { return true; }
     }
-    if (ip.startsWith('0') && /^[0-7.]+$/.test(ip)) {
-      try { ip = ip.split('.').map(octet => parseInt(octet, 8)).join('.'); } catch (e) { return true; }
+    
+    // 2. Handle Octal (leading 0) - e.g., 0177.0.0.1
+    else if (ip.startsWith('0') && ip.includes('.') && /^[0-7.]+$/.test(ip)) {
+        try {
+          ip = ip.split('.').map(part => parseInt(part, 8)).join('.');
+        } catch (e) { return true; }
     }
-    if (ip.toLowerCase().includes('0x')) {
-      try { ip = ip.split('.').map(hexet => hexet.startsWith('0x') ? parseInt(hexet, 16) : hexet).join('.'); } catch (e) { return true; }
+
+    // 3. Handle Decimal (Flat Integer) e.g. 2130706433
+    else if (/^\d+$/.test(ip)) {
+      try {
+        const decimal = parseInt(ip, 10);
+        if (decimal < 0 || decimal > 0xFFFFFFFF) return true; // Invalid range
+        ip = intToIp(decimal);
+      } catch (e) { return true; }
     }
+
+    // Basic localhost variations
     if (ip === 'localhost' || ip === '127.0.0.1' || ip === '::1') return true;
+
+    // Standard Node.js IP checks
     if (net.isIP(ip)) {
       return (
         net.isIPv4(ip) && (
           ip.startsWith('10.') ||
           ip.startsWith('192.168.') ||
-          (ip.startsWith('172.') && parseInt(ip.split('.')[1], 10) >= 16 && parseInt(ip.split('.')[1], 10) <= 31) ||
-          ip.startsWith('169.254.') ||
-          ip.startsWith('127.') ||
-          ip === '0.0.0.0'
+          (ip.startsWith('172.') && {
+            '16': true, '17': true, '18': true, '19': true,
+            '20': true, '21': true, '22': true, '23': true,
+            '24': true, '25': true, '26': true, '27': true,
+            '28': true, '29': true, '30': true, '31': true
+          }[ip.split('.')[1]]) ||
+          ip.startsWith('169.254.') || // Link-local
+          ip.startsWith('127.') || // Loopback
+          ip === '0.0.0.0' // Unspecified
         ) ||
         net.isIPv6(ip) && (
-          ip.startsWith('fe80::') || ip.startsWith('fc') || ip.startsWith('fd') || ip === '::1' || ip.startsWith('::ffff:127') || ip === '::'
+          ip.startsWith('fe80::') || // Link-local
+          ip.startsWith('fc') || // Private
+          ip.startsWith('fd') || // Private
+          ip === '::1' || // Loopback
+          ip.startsWith('::ffff:127') || // IPv4-mapped localhost
+          ip.startsWith('::ffff:192.168.') || 
+          ip.startsWith('::ffff:10.') || 
+          ip.startsWith('::ffff:172.') || 
+          ip === '::' // Unspecified
         )
       );
     }
+
     return false;
   }
 };
@@ -107,7 +152,9 @@ const ssrfLogic = {
 
   await runTest('SSRF: Detect Octal/Hex Obfuscation', async () => {
     assert.strictEqual(ssrfLogic.isPrivateOrLocalIP('0177.0.0.1'), true); // Octal 127.0.0.1
+    // This previously failed, but should now pass with updated logic
     assert.strictEqual(ssrfLogic.isPrivateOrLocalIP('0x7f000001'), true); // Hex 127.0.0.1
+    assert.strictEqual(ssrfLogic.isPrivateOrLocalIP('2130706433'), true); // Decimal 127.0.0.1
   });
 
   await runTest('SSRF: Allow Public IP', async () => {
@@ -134,6 +181,7 @@ const ssrfLogic = {
 
   await runTest('Security Headers: X-RateLimit', async () => {
     const res = await axios.get(`${BASE_URL}/`);
+    // NOTE: This requires 'legacyHeaders: true' in server.js rateLimit config
     assert.ok(res.headers['x-ratelimit-limit'], 'Rate limit headers missing');
   });
 
@@ -195,7 +243,6 @@ const ssrfLogic = {
     // This is aggressive, verify configured RATE_LIMIT in .env (default 120)
     // We will fire requests until we hit a 429
     let hitLimit = false;
-    const limit = parseInt(process.env.RATE_LIMIT || '120') + 10;
     
     // Create an axios instance that ignores status codes so 429 doesn't throw
     const client = axios.create({ validateStatus: () => true });
