@@ -104,7 +104,7 @@ passport.use(new GoogleStrategy({
 ));
 
 const HOST = process.env.HOST || '0.0.0.0';
-const PORT = parseInt(process.env.PORT || '3000', 10);
+const PORT = Number.parseInt(process.env.PORT || '3000', 10);
 const USE_TLS = process.env.USE_TLS === 'true';
 const REQUIRE_TLS = process.env.REQUIRE_TLS === 'true'; // Fail startup if TLS required but not available
 const TLS_KEY = process.env.TLS_KEY || '/etc/letsencrypt/live/keysocket.eu/privkey.pem';
@@ -266,7 +266,7 @@ function parseWebSocketSession(req, callback) {
     });
 
     // Get session from store with a timeout to avoid hanging upgrades
-    const GET_TIMEOUT_MS = parseInt(process.env.SESSION_STORE_GET_TIMEOUT_MS || '2000', 10);
+    const GET_TIMEOUT_MS = Number.parseInt(process.env.SESSION_STORE_GET_TIMEOUT_MS || '2000', 10);
     let called = false;
     const timer = setTimeout(() => {
       called = true;
@@ -549,7 +549,7 @@ app.get('/auth/status', (req, res) => {
 // Rate limit all requests (basic protection)
 const limiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: parseInt(process.env.RATE_LIMIT || '120', 10),
+  max: Number.parseInt(process.env.RATE_LIMIT || '120', 10),
   standardHeaders: true,
   legacyHeaders: true, // ADDED: Must be true for test_all.js to pass header checks
 });
@@ -587,7 +587,7 @@ function serveConsole(req, res) {
   try {
     const consolePath = path.join(__dirname, 'console.html');
     let html = fs.readFileSync(consolePath, 'utf8');
-    html = html.replace(/__ASSET_VERSION__/g, ASSET_VERSION);
+    html = html.replaceAll(/__ASSET_VERSION__/g, ASSET_VERSION);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     return res.send(html);
   } catch (e) {
@@ -600,7 +600,7 @@ function serveIndex(req, res) {
     // Always serve the same HTML - let frontend handle authentication logic
     const indexPath = path.join(__dirname, 'index.html');
     let html = fs.readFileSync(indexPath, 'utf8');
-    html = html.replace(/__ASSET_VERSION__/g, ASSET_VERSION);
+    html = html.replaceAll(/__ASSET_VERSION__/g, ASSET_VERSION);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     return res.send(html);
   } catch (e) {
@@ -633,8 +633,8 @@ app.post('/turnstile-verify', (req, res) => {
   // verify with Cloudflare, with a single retry for transient server errors
   const postData = `secret=${encodeURIComponent(TURNSTILE_SECRET)}&response=${encodeURIComponent(token)}&remoteip=${encodeURIComponent(req.socket.remoteAddress || '')}`;
 
-  const MAX_RETRIES = parseInt(process.env.TURNSTILE_MAX_RETRIES || '1', 10);
-  const TIMEOUT_MS = parseInt(process.env.TURNSTILE_REQUEST_TIMEOUT_MS || '10000', 10);
+  const MAX_RETRIES = Number.parseInt(process.env.TURNSTILE_MAX_RETRIES || '1', 10);
+  const TIMEOUT_MS = Number.parseInt(process.env.TURNSTILE_REQUEST_TIMEOUT_MS || '10000', 10);
 
   const verifyWithCloudflare = (attempt = 0) => new Promise((resolve, reject) => {
     const options = {
@@ -680,7 +680,7 @@ app.post('/turnstile-verify', (req, res) => {
         }
 
         // Check length mismatch for diagnostics
-        const declaredLen = parseInt(resp.headers['content-length'] || '0', 10) || 0;
+        const declaredLen = Number.parseInt(resp.headers['content-length'] || '0', 10) || 0;
         if (declaredLen > 0 && declaredLen !== data.length) {
           logger.warn('Turnstile response length mismatch', { declared: declaredLen, received: data.length });
         }
@@ -876,16 +876,16 @@ const wss = new WebSocketServer({
 });
 
 // Simple per-IP concurrent session limit
-const CONCURRENT_PER_IP = parseInt(process.env.CONCURRENT_PER_IP || '5', 10);
+const CONCURRENT_PER_IP = Number.parseInt(process.env.CONCURRENT_PER_IP || '5', 10);
 const ipSessions = new Map();
 
 // SSH brute-force protection
-const MAX_SSH_ATTEMPTS_PER_USER = parseInt(process.env.MAX_SSH_ATTEMPTS_PER_USER || '5', 10);
+const MAX_SSH_ATTEMPTS_PER_USER = Number.parseInt(process.env.MAX_SSH_ATTEMPTS_PER_USER || '5', 10);
 const sshAttempts = new Map(); // userId -> { count: number, lastAttempt: timestamp }
 
 // Cloudflare Turnstile config
 const TURNSTILE_SECRET = process.env.TURNSTILE_SECRET || '';
-const TURNSTILE_TOKEN_TTL_MS = parseInt(process.env.TURNSTILE_TOKEN_TTL_MS || String(30 * 1000), 10);
+const TURNSTILE_TOKEN_TTL_MS = Number.parseInt(process.env.TURNSTILE_TOKEN_TTL_MS || String(30 * 1000), 10);
 
 function incrIp(ip) {
   const n = (ipSessions.get(ip) || 0) + 1;
@@ -956,11 +956,11 @@ function isPrivateOrLocalIP(input) {
     try {
       if (ip.includes('.')) {
         // Dotted hex: 0x7F.0x00.0x00.0x01
-        ip = ip.split('.').map(part => parseInt(part, 16)).join('.');
+        ip = ip.split('.').map(part => Number.parseInt(part, 16)).join('.');
       } else {
         // Flat hex: 0x7f000001
-        const intVal = parseInt(ip, 16);
-        if (isNaN(intVal)) return true;
+        const intVal = Number.parseInt(ip, 16);
+        if (Number.isNaN(intVal)) return true;
         ip = intToIp(intVal);
       }
     } catch (e) { return true; }
@@ -969,14 +969,14 @@ function isPrivateOrLocalIP(input) {
   // 2. Handle Octal (leading 0) - e.g., 0177.0.0.1
   else if (ip.startsWith('0') && ip.includes('.') && /^[0-7.]+$/.test(ip)) {
       try {
-        ip = ip.split('.').map(part => parseInt(part, 8)).join('.');
+        ip = ip.split('.').map(part => Number.parseInt(part, 8)).join('.');
       } catch (e) { return true; }
   }
 
   // 3. Handle Decimal (Flat Integer) e.g. 2130706433
   else if (/^\d+$/.test(ip)) {
     try {
-      const decimal = parseInt(ip, 10);
+      const decimal = Number.parseInt(ip, 10);
       if (decimal < 0 || decimal > 0xFFFFFFFF) return true; // Invalid range
       ip = intToIp(decimal);
     } catch (e) { return true; }
@@ -1346,7 +1346,7 @@ wss.on('connection', (ws, req) => {
         const connectionStartTime = Date.now();
         const connectOpts = {
           host: targetAddress, // 3. IMPORTANT: Connect to the VALIDATED IP, not the hostname
-          port: parseInt(port || '22', 10),
+          port: Number.parseInt(port || '22', 10),
           username: username,
           readyTimeout: 20000,
           algorithms: { // keep defaults but allow modern servers
@@ -1438,8 +1438,8 @@ wss.on('connection', (ws, req) => {
 
         sshClient.connect(connectOpts);
       } else if (parsed.type === 'resize') {
-        const cols = parseInt(parsed.cols || '80', 10);
-        const rows = parseInt(parsed.rows || '24', 10);
+        const cols = Number.parseInt(parsed.cols || '80', 10);
+        const rows = Number.parseInt(parsed.rows || '24', 10);
         if (sshStream && sshStream.setWindow) sshStream.setWindow(rows, cols, rows * 8, cols * 8);
       }
       return;
