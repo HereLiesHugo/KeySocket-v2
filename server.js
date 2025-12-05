@@ -587,7 +587,7 @@ function serveConsole(req, res) {
   try {
     const consolePath = path.join(__dirname, 'console.html');
     let html = fs.readFileSync(consolePath, 'utf8');
-    html = html.replace(/__ASSET_VERSION__/g, ASSET_VERSION);
+    html = html.replaceAll(/__ASSET_VERSION__/g, ASSET_VERSION);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     return res.send(html);
   } catch (e) {
@@ -600,7 +600,7 @@ function serveIndex(req, res) {
     // Always serve the same HTML - let frontend handle authentication logic
     const indexPath = path.join(__dirname, 'index.html');
     let html = fs.readFileSync(indexPath, 'utf8');
-    html = html.replace(/__ASSET_VERSION__/g, ASSET_VERSION);
+    html = html.replaceAll(/__ASSET_VERSION__/g, ASSET_VERSION);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     return res.send(html);
   } catch (e) {
