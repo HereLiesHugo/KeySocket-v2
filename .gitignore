@@ -24,4 +24,3 @@ pycache/
 *.pyd
 __pycache__/
 .ipynb_checkpoints
-package-lock.json
