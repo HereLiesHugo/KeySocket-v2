@@ -407,6 +407,10 @@ function cleanupExpiredSessions() {
     logger.debug(`Found ${files.length} session files to check`);
 
     files.forEach(file => {
+      if (file.includes('..')) {
+        logger.warn('Invalid filename detected', { filename: file });
+        return;
+      }
       const filePath = path.join(sessionsDir, file);
       try {
         const stats = fs.statSync(filePath);
