@@ -226,20 +226,36 @@
 
         function renderKeyboard() {
             const layout = keyLayouts[state.layout] || [];
-            container.innerHTML = layout.map(row => `
-                <div class="keyboard-row">
-                    ${row.map(key => {
-                        const displayChar = state.shift ? (key.shiftKey || key.key.toUpperCase()) : key.key;
-                        const keyChar = key.key;
-                        const shiftChar = key.shiftKey || key.key.toUpperCase();
-                        const flex = key.flex || 1;
-                        let className = 'keyboard-key';
-                        if (key.modifier && (state.shift || state.ctrl)) className += ' keyboard-key--active';
+            // Clear container safely
+            while (container.firstChild) {
+                container.removeChild(container.firstChild);
+            }
+            
+            layout.forEach(row => {
+                const rowDiv = document.createElement('div');
+                rowDiv.className = 'keyboard-row';
+                
+                row.forEach(key => {
+                    const displayChar = state.shift ? (key.shiftKey || key.key.toUpperCase()) : key.key;
+                    const keyChar = key.key;
+                    const shiftChar = key.shiftKey || key.key.toUpperCase();
+                    const flex = key.flex || 1;
+                    let className = 'keyboard-key';
+                    if (key.modifier && (state.shift || state.ctrl)) className += ' keyboard-key--active';
 
-                        return `<button class="${className}" style="flex-grow: ${flex}" data-code="${escapeHTML(key.code)}" data-key="${escapeHTML(keyChar)}" data-shift-key="${escapeHTML(shiftChar)}">${escapeHTML(displayChar)}</button>`;
-                    }).join('')}
-                </div>
-            `).join('');
+                    const btn = document.createElement('button');
+                    btn.className = className;
+                    btn.style.flexGrow = flex;
+                    btn.setAttribute('data-code', key.code);
+                    btn.setAttribute('data-key', keyChar);
+                    btn.setAttribute('data-shift-key', shiftChar);
+                    btn.textContent = displayChar; // Safe text insertion
+                    
+                    rowDiv.appendChild(btn);
+                });
+                
+                container.appendChild(rowDiv);
+            });
 
             const shiftKeys = container.querySelectorAll('[data-code="ShiftLeft"], [data-code="ShiftRight"]');
             shiftKeys.forEach(k => k.classList.toggle('keyboard-key--active', state.shift));
@@ -399,28 +415,67 @@
 
     function renderAppManagementConnections(list) {
         if (!appManagementConnectionsList) return;
+        
+        // Clear container safely
+        while (appManagementConnectionsList.firstChild) {
+            appManagementConnectionsList.removeChild(appManagementConnectionsList.firstChild);
+        }
+        
         if (!list || !list.length) {
-            appManagementConnectionsList.innerHTML = '<p class="app-management-help">No saved connections yet. Save a connection from the main form, then manage it here.</p>';
+            const p = document.createElement('p');
+            p.className = 'app-management-help';
+            p.textContent = 'No saved connections yet. Save a connection from the main form, then manage it here.';
+            appManagementConnectionsList.appendChild(p);
             return;
         }
-        appManagementConnectionsList.innerHTML = list.map((c, i) => {
+        
+        list.forEach((c, i) => {
             const host = c.host || '';
             const port = c.port || '22';
             const username = c.username || '';
             const auth = c.auth || 'password';
             const main = (username ? (username + '@') : '') + host + ':' + port;
             const sub = auth === 'password' ? 'Password auth' : 'Private key auth';
-            return '<div class="connection-item" data-index="' + i + '">' +
-                '<div class="connection-meta">' +
-                '<div class="connection-meta-main">' + escapeHTML(main) + '</div>' +
-                '<div class="connection-meta-sub">' + escapeHTML(sub) + '</div>' +
-                '</div>' +
-                '<div class="connection-actions">' +
-                '<button type="button" class="edit-btn">Edit</button>' +
-                '<button type="button" class="delete-btn">Delete</button>' +
-                '</div>' +
-                '</div>';
-        }).join('');
+            
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'connection-item';
+            itemDiv.setAttribute('data-index', i);
+            
+            const metaDiv = document.createElement('div');
+            metaDiv.className = 'connection-meta';
+            
+            const mainDiv = document.createElement('div');
+            mainDiv.className = 'connection-meta-main';
+            mainDiv.textContent = main; // Safe text insertion
+            
+            const subDiv = document.createElement('div');
+            subDiv.className = 'connection-meta-sub';
+            subDiv.textContent = sub; // Safe text insertion
+            
+            metaDiv.appendChild(mainDiv);
+            metaDiv.appendChild(subDiv);
+            
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'connection-actions';
+            
+            const editBtn = document.createElement('button');
+            editBtn.type = 'button';
+            editBtn.className = 'edit-btn';
+            editBtn.textContent = 'Edit';
+            
+            const deleteBtn = document.createElement('button');
+            deleteBtn.type = 'button';
+            deleteBtn.className = 'delete-btn';
+            deleteBtn.textContent = 'Delete';
+            
+            actionsDiv.appendChild(editBtn);
+            actionsDiv.appendChild(deleteBtn);
+            
+            itemDiv.appendChild(metaDiv);
+            itemDiv.appendChild(actionsDiv);
+            
+            appManagementConnectionsList.appendChild(itemDiv);
+        });
     }
 
     function saveConnection() {
@@ -440,7 +495,26 @@
     function loadSaved() {
         const list = getConnections();
         if (!savedList) return;
-        savedList.innerHTML = '<option value="">Saved connections</option>' + list.map((c, i) => ` <option value="${i}">${escapeHTML(`${c.username}@${c.host}:${c.port} (${c.auth})`)}</option>`).join('\n');
+        
+        // Clear existing options safely
+        while (savedList.firstChild) {
+            savedList.removeChild(savedList.firstChild);
+        }
+        
+        // Add default option
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = 'Saved connections';
+        savedList.appendChild(defaultOption);
+        
+        // Add saved connections as options
+        list.forEach((c, i) => {
+            const option = document.createElement('option');
+            option.value = i;
+            option.textContent = `${c.username}@${c.host}:${c.port} (${c.auth})`; // Safe text insertion
+            savedList.appendChild(option);
+        });
+        
         renderAppManagementConnections(list);
     }
     loadSaved();
