@@ -1,0 +1,17 @@
+# robots.txt for KeySocket
+# Allow search engines to index the landing page
+# Block console page due to Turnstile bot verification
+
+User-agent: *
+Allow: /
+Disallow: /console
+Disallow: /console.html
+Disallow: /sessions/
+Disallow: /.git/
+Disallow: /node_modules/
+Disallow: /js/
+Disallow: /css/
+Disallow: /lib/
+
+# Sitemap location
+Sitemap: https://keysocket.eu/sitemap.xml
