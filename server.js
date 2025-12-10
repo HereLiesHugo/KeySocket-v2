@@ -499,7 +499,7 @@ function cleanupExpiredTurnstileTokens() {
 setInterval(cleanupExpiredTurnstileTokens, 5 * 60 * 1000);
 
 // CSRF Protection Configuration
-const csrfSecret = process.env.CSRF_SECRET /*|| process.env.SESSION_SECRET*/;
+const csrfSecret = process.env.CSRF_SECRET || process.env.SESSION_SECRET;
 
 const {
   generateToken, // Generates a CSRF token pair
