@@ -407,7 +407,27 @@ function cleanupExpiredSessions() {
     logger.debug(`Found ${files.length} session files to check`);
 
     files.forEach(file => {
+      // SECURITY: Validate file path to prevent path traversal
+      // Reject filenames with path separators or parent directory references
+      if (file.includes('..') || file.includes('/') || file.includes('\\')) {
+        logger.warn('Rejected suspicious session filename', { filename: file });
+        return;
+      }
+      
       const filePath = path.join(sessionsDir, file);
+      
+      // SECURITY: Verify the resolved path is within sessionsDir
+      const resolvedPath = path.resolve(filePath);
+      const resolvedBase = path.resolve(sessionsDir);
+      if (!resolvedPath.startsWith(resolvedBase + path.sep) && resolvedPath !== resolvedBase) {
+        logger.warn('Path traversal attempt detected in session cleanup', { 
+          filename: file, 
+          resolved: resolvedPath,
+          base: resolvedBase
+        });
+        return;
+      }
+      
       try {
         const stats = fs.statSync(filePath);
         const fileAge = Date.now() - stats.mtime.getTime();
