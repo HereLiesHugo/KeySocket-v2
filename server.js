@@ -504,7 +504,7 @@ const {
   doubleCsrfProtection, // Middleware to apply CSRF protection
 } = doubleCsrf({
   getSecret: () => process.env.CSRF_SECRET || 'default-csrf-secret-change-in-production',
-  cookieName: '__Host-psifi.x-csrf-token',
+  cookieName: 'x-csrf-token', // Simplified cookie name (remove __Host- prefix for compatibility)
   cookieOptions: {
     sameSite: cookieSecure ? 'none' : 'lax',
     path: '/',
@@ -519,6 +519,7 @@ const {
 
 logger.info('CSRF protection enabled', {
   cookie_secure: cookieSecure,
+  cookie_name: 'x-csrf-token',
   ignored_methods: ['GET', 'HEAD', 'OPTIONS']
 });
 
@@ -663,8 +664,14 @@ app.get('/health', (req, res) => res.json({ ok: true, env: process.env.NODE_ENV 
 
 // CSRF token generation endpoint
 app.get('/csrf-token', (req, res) => {
-  const csrfToken = generateToken(req, res);
-  res.json({ csrfToken });
+  try {
+    const csrfToken = generateToken(req, res);
+    res.setHeader('Content-Type', 'application/json');
+    res.json({ csrfToken });
+  } catch (error) {
+    logger.error('CSRF token generation failed', { error: error.message });
+    res.status(500).json({ error: 'Failed to generate CSRF token' });
+  }
 });
 
 // Sitemap endpoint
