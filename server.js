@@ -185,6 +185,7 @@ app.use((req, res, next) => {
 
 app.use(express.json({ limit: '200kb' }));
 app.use(express.urlencoded({ extended: false }));
+app.use(cookieParser()); // Required for CSRF protection to read cookies
 
 // Static file serving with caching
 app.use('/lib', express.static('lib', {
