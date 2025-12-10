@@ -499,13 +499,15 @@ function cleanupExpiredTurnstileTokens() {
 setInterval(cleanupExpiredTurnstileTokens, 5 * 60 * 1000);
 
 // CSRF Protection Configuration
+const csrfSecret = process.env.CSRF_SECRET /*|| process.env.SESSION_SECRET*/;
+
 const {
   generateToken, // Generates a CSRF token pair
   validateRequest, // Validates CSRF token from request
   doubleCsrfProtection, // Middleware to apply CSRF protection
 } = doubleCsrf({
-  getSecret: () => process.env.CSRF_SECRET || 'default-csrf-secret-change-in-production',
-  cookieName: 'x-csrf-token', // Simplified cookie name (remove __Host- prefix for compatibility)
+  getSecret: () => csrfSecret, // Return the secret string
+  cookieName: 'x-csrf-token',
   cookieOptions: {
     sameSite: cookieSecure ? 'none' : 'lax',
     path: '/',
@@ -518,11 +520,18 @@ const {
   getTokenFromRequest: (req) => req.headers['x-csrf-token'] || req.body?.csrfToken
 });
 
+
 logger.info('CSRF protection enabled', {
   cookie_secure: cookieSecure,
   cookie_name: 'x-csrf-token',
+  secret_source: process.env.CSRF_SECRET ? 'CSRF_SECRET' : (process.env.SESSION_SECRET ? 'SESSION_SECRET' : 'default'),
+  secret_length: csrfSecret.length,
   ignored_methods: ['GET', 'HEAD', 'OPTIONS']
 });
+
+if (!process.env.CSRF_SECRET && !process.env.SESSION_SECRET) {
+  logger.warn('Using default CSRF secret - set CSRF_SECRET or SESSION_SECRET in production!');
+}
 
 app.use(passport.initialize());
 app.use(passport.session());
