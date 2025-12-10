@@ -1,4 +1,4 @@
-from subprocess import call, check_call, CalledProcessError
+from subprocess import run, CalledProcessError
 from time import sleep
 
 # --- CONFIGURATION ---
@@ -60,38 +60,43 @@ def log_warn(msg):
 def log_error(msg):
     log(msg, bcolors.FAIL)
 
-branch = check_call("git branch --show-current", shell=True)
+# Securely get the branch name without shell=True
+# capture_output=True allows us to read stdout/stderr
+branch_proc = run(["git", "branch", "--show-current"], capture_output=True, text=True, check=True)
+branch = branch_proc.stdout.strip()
 
 try:
     # 1. GIT OPERATIONS
     log_info(f'You are currently on branch "{branch}"')
     log_action(f'Fetching/Pulling latest changes from {branch}...')
-    check_call('git fetch --all', shell=True)
+    
+    # check=True replaces check_call. It raises CalledProcessError on non-zero exit code.
+    run(['git', 'fetch', '--all'], check=True)
     success("Fetched latest changes.")
     
-    check_call('git pull', shell=True)
+    run(['git', 'pull'], check=True)
     success("Pulled latest changes.")
     sleep(1)
 
     # 2. DEPENDENCIES
     log_action('Installing backend dependencies...')
-    check_call('npm install', shell=True)
+    run(['npm', 'install'], check=True)
     success("Installed backend dependencies.")
     sleep(1)
 
     log_action('Auditing dependencies...')
-    # Using 'call' allows the script to continue even if vulnerabilities are found
-    call('npm audit', shell=True)
+    # check=False (default) mimics 'call' behavior (continues on error)
+    run(['npm', 'audit'], check=False)
     info("Audit check complete.")
     sleep(1)
     
     # 3. BACKEND RELOAD
     log_action(f'Reloading {APP_NAME} through pm2 (ecosystem)...')
     # Use ecosystem file to ensure cwd and env are explicit
-    check_call('pm2 startOrReload ecosystem.config.js --update-env', shell=True)
+    run(['pm2', 'startOrReload', 'ecosystem.config.js', '--update-env'], check=True)
     success("pm2 startOrReload executed.")
     # Persist current process list (so pm2 resurrect works after reboot)
-    check_call('pm2 save', shell=True)
+    run(['pm2', 'save'], check=True)
     success('pm2 process list saved.')
     
     log_info('Waiting for backend to stabilize (3s)...')
@@ -101,29 +106,30 @@ try:
     log_action(f'Verifying backend is running on port {PORT}...')
     # -f: Fails on HTTP errors (404/500)
     # --retry 3: Tries 3 times before giving up
-    check_call(f'curl -f -I --retry 3 --retry-delay 1 http://localhost:{PORT}', shell=True)
+    # Note: PORT is an integer, so we format it into the URL string securely
+    run(['curl', '-f', '-I', '--retry', '3', '--retry-delay', '1', f'http://localhost:{PORT}'], check=True)
     success("Backend health check passed.")
     sleep(1)
 
     # 5. NGINX RELOAD
     log_action('Verifying nginx configuration...')
     # Always test config before reloading!
-    check_call('sudo nginx -t', shell=True)
+    run(['sudo', 'nginx', '-t'], check=True)
     success("Nginx configuration valid.")
     sleep(1)
 
     log_action('Reloading nginx...')
-    check_call('sudo systemctl reload nginx', shell=True)
+    run(['sudo', 'systemctl', 'reload', 'nginx'], check=True)
     success("Nginx reloaded.")
     sleep(1)
 
     # 6. STATUS REPORTS
     log_info('Checking nginx status...')
-    call('sudo systemctl status nginx --no-pager', shell=True)
+    run(['sudo', 'systemctl', 'status', 'nginx', '--no-pager'], check=False)
     sleep(1)
 
     log_info(f'Checking pm2 status for {APP_NAME}...')
-    call(f'pm2 status {APP_NAME}', shell=True)
+    run(['pm2', 'status', APP_NAME], check=False)
     sleep(1)
 
     # 7. DONE
@@ -132,8 +138,9 @@ try:
     success('Deployment script finished successfully.')
     sleep(1)
 
-except CalledProcessError:
+except CalledProcessError as e:
     error("\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
     error("ERROR: One of the commands failed. Deployment stopped.")
+    error(f"Command failed: {e.cmd}")
     error("Check the logs above to see which step failed.")
     error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")

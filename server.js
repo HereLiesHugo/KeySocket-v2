@@ -563,19 +563,19 @@ app.use(express.static(publicDir, { index: false }));
 // Serve xterm libraries from node_modules (with proper MIME types)
 app.get('/lib/xterm.css', (req, res) => {
   res.setHeader('Content-Type', 'text/css; charset=utf-8');
-  res.sendFile(path.join(__dirname, 'node_modules/@xterm/xterm/css/xterm.css'));
+  res.sendFile('node_modules/@xterm/xterm/css/xterm.css', { root: __dirname });
 });
 app.get('/lib/xterm.js', (req, res) => {
   res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-  res.sendFile(path.join(__dirname, 'node_modules/@xterm/xterm/lib/xterm.js'));
+  res.sendFile('node_modules/@xterm/xterm/lib/xterm.js', { root: __dirname });
 });
 app.get('/lib/xterm-addon-fit.js', (req, res) => {
   res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-  res.sendFile(path.join(__dirname, 'node_modules/@xterm/addon-fit/lib/addon-fit.js'));
+  res.sendFile('node_modules/@xterm/addon-fit/lib/addon-fit.js', { root: __dirname });
 });
 app.get('/lib/xterm-addon-webgl.js', (req, res) => {
   res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-  res.sendFile(path.join(__dirname, 'node_modules/@xterm/addon-webgl/lib/addon-webgl.js'));
+  res.sendFile('node_modules/@xterm/addon-webgl/lib/addon-webgl.js', { root: __dirname });
 });
 
 // Asset version for cache-busting: use env `ASSET_VERSION`, package.json version, or timestamp
