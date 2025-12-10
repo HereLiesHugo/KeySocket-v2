@@ -17,6 +17,7 @@ const { URL } = require('url');
 const cookie = require('cookie');
 const cookieParser = require('cookie-parser');
 const dns = require('dns').promises; // ADDED: Required for SSRF fix
+const { doubleCsrf } = require('csrf-csrf'); // ADDED: CSRF protection
 
 // Enhanced logging system
 const logFile = path.join(__dirname, 'server.log');
@@ -496,6 +497,31 @@ function cleanupExpiredTurnstileTokens() {
 // Run Turnstile token cleanup every 5 minutes
 setInterval(cleanupExpiredTurnstileTokens, 5 * 60 * 1000);
 
+// CSRF Protection Configuration
+const {
+  generateToken, // Generates a CSRF token pair
+  validateRequest, // Validates CSRF token from request
+  doubleCsrfProtection, // Middleware to apply CSRF protection
+} = doubleCsrf({
+  getSecret: () => process.env.CSRF_SECRET || 'default-csrf-secret-change-in-production',
+  cookieName: '__Host-psifi.x-csrf-token',
+  cookieOptions: {
+    sameSite: cookieSecure ? 'none' : 'lax',
+    path: '/',
+    secure: cookieSecure,
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  },
+  size: 64,
+  ignoredMethods: ['GET', 'HEAD', 'OPTIONS'],
+  getTokenFromRequest: (req) => req.headers['x-csrf-token'] || req.body?.csrfToken
+});
+
+logger.info('CSRF protection enabled', {
+  cookie_secure: cookieSecure,
+  ignored_methods: ['GET', 'HEAD', 'OPTIONS']
+});
+
 app.use(passport.initialize());
 app.use(passport.session());
 
@@ -635,11 +661,18 @@ app.get('/console.html', serveConsole);
 
 app.get('/health', (req, res) => res.json({ ok: true, env: process.env.NODE_ENV || 'development' }));
 
+// CSRF token generation endpoint
+app.get('/csrf-token', (req, res) => {
+  const csrfToken = generateToken(req, res);
+  res.json({ csrfToken });
+});
+
 // Sitemap endpoint
 // Fully Moved to nginx
 
 // Turnstile verification endpoint - accepts a client token and verifies with Cloudflare
-app.post('/turnstile-verify', (req, res) => {
+// CSRF protection applied to prevent cross-site request forgery
+app.post('/turnstile-verify', doubleCsrfProtection, (req, res) => {
   console.log('[Turnstile] Received verification request');
   console.log('[Turnstile] Request headers:', req.headers);
   console.log('[Turnstile] Request body:', req.body);
