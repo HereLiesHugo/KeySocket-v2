@@ -167,9 +167,14 @@ app.use((req, res, next) => {
     'https://challenges.cloudflare.com'
   ];
   
-  if (allowedOrigins.includes(origin) || !origin) {
-    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+  // SECURITY FIX: Use fixed origin from allowedOrigins instead of reflecting user input
+  if (origin && allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  } else if (!origin) {
+    // For same-origin requests (no Origin header), use primary domain
+    res.setHeader('Access-Control-Allow-Origin', 'https://keysocket.eu');
   }
+  // If origin is not in allowedOrigins, don't set the header (deny the request)
   
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
