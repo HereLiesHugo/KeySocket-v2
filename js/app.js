@@ -28,6 +28,16 @@
     const appThemeSelect = document.getElementById('app-theme-select');
     const WebglAddon = (window.WebglAddon && (window.WebglAddon.WebglAddon || window.WebglAddon)) || null;
 
+    function escapeHTML(str) {
+        if (str == null) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
     let term;
     let fit;
     let currentTheme = 'dark';
@@ -226,7 +236,7 @@
                         let className = 'keyboard-key';
                         if (key.modifier && (state.shift || state.ctrl)) className += ' keyboard-key--active';
 
-                        return `<button class="${className}" style="flex-grow: ${flex}" data-code="${key.code}" data-key="${keyChar}" data-shift-key="${shiftChar}">${displayChar}</button>`;
+                        return `<button class="${className}" style="flex-grow: ${flex}" data-code="${escapeHTML(key.code)}" data-key="${escapeHTML(keyChar)}" data-shift-key="${escapeHTML(shiftChar)}">${escapeHTML(displayChar)}</button>`;
                     }).join('')}
                 </div>
             `).join('');
@@ -402,8 +412,8 @@
             const sub = auth === 'password' ? 'Password auth' : 'Private key auth';
             return '<div class="connection-item" data-index="' + i + '">' +
                 '<div class="connection-meta">' +
-                '<div class="connection-meta-main">' + main + '</div>' +
-                '<div class="connection-meta-sub">' + sub + '</div>' +
+                '<div class="connection-meta-main">' + escapeHTML(main) + '</div>' +
+                '<div class="connection-meta-sub">' + escapeHTML(sub) + '</div>' +
                 '</div>' +
                 '<div class="connection-actions">' +
                 '<button type="button" class="edit-btn">Edit</button>' +
@@ -430,7 +440,7 @@
     function loadSaved() {
         const list = getConnections();
         if (!savedList) return;
-        savedList.innerHTML = '<option value="">Saved connections</option>' + list.map((c, i) => ` <option value="${i}">${c.username}@${c.host}:${c.port} (${c.auth})</option>`).join('\n');
+        savedList.innerHTML = '<option value="">Saved connections</option>' + list.map((c, i) => ` <option value="${i}">${escapeHTML(`${c.username}@${c.host}:${c.port} (${c.auth})`)}</option>`).join('\n');
         renderAppManagementConnections(list);
     }
     loadSaved();
