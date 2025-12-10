@@ -503,7 +503,6 @@ const csrfSecret = process.env.CSRF_SECRET /*|| process.env.SESSION_SECRET*/;
 
 const {
   generateToken, // Generates a CSRF token pair
-  validateRequest, // Validates CSRF token from request
   doubleCsrfProtection, // Middleware to apply CSRF protection
 } = doubleCsrf({
   getSecret: () => csrfSecret, // Return the secret string
