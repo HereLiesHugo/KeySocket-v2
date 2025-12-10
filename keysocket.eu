@@ -110,7 +110,7 @@ server {
     }
 
     # Favicon
-    location = /img/keysocket-high-resolution-logo.png {
+    location = /favicon.ico {
         root /var/www/keysocket.eu;
         access_log off;
         log_not_found off;
