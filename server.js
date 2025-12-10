@@ -501,6 +501,14 @@ setInterval(cleanupExpiredTurnstileTokens, 5 * 60 * 1000);
 // CSRF Protection Configuration
 const csrfSecret = process.env.CSRF_SECRET || process.env.SESSION_SECRET;
 
+// Validate CSRF secret
+if (!csrfSecret) {
+  throw new Error('CSRF_SECRET or SESSION_SECRET must be set in environment variables');
+}
+if (csrfSecret.length < 32) {
+  throw new Error(`CSRF secret must be at least 32 characters long (current: ${csrfSecret.length})`);
+}
+
 const {
   generateToken, // Generates a CSRF token pair
   doubleCsrfProtection, // Middleware to apply CSRF protection
