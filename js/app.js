@@ -1003,22 +1003,11 @@
     function verifyTurnstileToken(token, attempt = 0) {
         const MAX = 2; // client-side retries
         const backoff = 200 * Math.pow(2, attempt);
-        
-        // Fetch CSRF token first, then make the verification request
-        return fetch('/csrf-token', {
-            method: 'GET',
+        return fetch('/turnstile-verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token }),
             credentials: 'same-origin'
-        }).then(csrfRes => csrfRes.json())
-        .then(csrfData => {
-            return fetch('/turnstile-verify', {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'x-csrf-token': csrfData.csrfToken // Include CSRF token
-                },
-                body: JSON.stringify({ token }),
-                credentials: 'same-origin'
-            });
         }).then(res => {
             if (res.status >= 500) {
                 if (attempt < MAX) {
@@ -1027,7 +1016,6 @@
                 throw new Error('Verification provider unavailable (server error). Please try again later.');
             }
             if (res.status === 502 || res.status === 503) throw new Error('Verification provider temporarily unavailable');
-            if (res.status === 403) throw new Error('CSRF validation failed. Please refresh the page.');
             const ct = res.headers.get('content-type') || '';
             if (!/application\/json/.test(ct)) throw new Error('Unexpected response from verification provider');
             return res.json();

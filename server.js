@@ -17,7 +17,6 @@ const { URL } = require('url');
 const cookie = require('cookie');
 const cookieParser = require('cookie-parser');
 const dns = require('dns').promises; // ADDED: Required for SSRF fix
-const { doubleCsrf } = require('csrf-csrf'); // ADDED: CSRF protection
 
 // Enhanced logging system
 const logFile = path.join(__dirname, 'server.log');
@@ -185,7 +184,6 @@ app.use((req, res, next) => {
 
 app.use(express.json({ limit: '200kb' }));
 app.use(express.urlencoded({ extended: false }));
-app.use(cookieParser()); // Required for CSRF protection to read cookies
 
 // Static file serving with caching
 app.use('/lib', express.static('lib', {
@@ -498,48 +496,6 @@ function cleanupExpiredTurnstileTokens() {
 // Run Turnstile token cleanup every 5 minutes
 setInterval(cleanupExpiredTurnstileTokens, 5 * 60 * 1000);
 
-// CSRF Protection Configuration
-const csrfSecret = process.env.CSRF_SECRET || process.env.SESSION_SECRET;
-
-// Validate CSRF secret
-if (!csrfSecret) {
-  throw new Error('CSRF_SECRET or SESSION_SECRET must be set in environment variables');
-}
-if (csrfSecret.length < 32) {
-  throw new Error(`CSRF secret must be at least 32 characters long (current: ${csrfSecret.length})`);
-}
-
-const {
-  generateToken, // Generates a CSRF token pair
-  doubleCsrfProtection, // Middleware to apply CSRF protection
-} = doubleCsrf({
-  getSecret: () => csrfSecret, // Return the secret string
-  cookieName: 'x-csrf-token',
-  cookieOptions: {
-    sameSite: cookieSecure ? 'none' : 'lax',
-    path: '/',
-    secure: cookieSecure,
-    httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
-  },
-  size: 64,
-  ignoredMethods: ['GET', 'HEAD', 'OPTIONS'],
-  getTokenFromRequest: (req) => req.headers['x-csrf-token'] || req.body?.csrfToken
-});
-
-
-logger.info('CSRF protection enabled', {
-  cookie_secure: cookieSecure,
-  cookie_name: 'x-csrf-token',
-  secret_source: process.env.CSRF_SECRET ? 'CSRF_SECRET' : (process.env.SESSION_SECRET ? 'SESSION_SECRET' : 'default'),
-  secret_length: csrfSecret.length,
-  ignored_methods: ['GET', 'HEAD', 'OPTIONS']
-});
-
-if (!process.env.CSRF_SECRET && !process.env.SESSION_SECRET) {
-  logger.warn('Using default CSRF secret - set CSRF_SECRET or SESSION_SECRET in production!');
-}
-
 app.use(passport.initialize());
 app.use(passport.session());
 
@@ -679,24 +635,11 @@ app.get('/console.html', serveConsole);
 
 app.get('/health', (req, res) => res.json({ ok: true, env: process.env.NODE_ENV || 'development' }));
 
-// CSRF token generation endpoint
-app.get('/csrf-token', (req, res) => {
-  try {
-    const csrfToken = generateToken(req, res);
-    res.setHeader('Content-Type', 'application/json');
-    res.json({ csrfToken });
-  } catch (error) {
-    logger.error('CSRF token generation failed', { error: error.message });
-    res.status(500).json({ error: 'Failed to generate CSRF token' });
-  }
-});
-
 // Sitemap endpoint
 // Fully Moved to nginx
 
 // Turnstile verification endpoint - accepts a client token and verifies with Cloudflare
-// CSRF protection applied to prevent cross-site request forgery
-app.post('/turnstile-verify', doubleCsrfProtection, (req, res) => {
+app.post('/turnstile-verify', (req, res) => {
   console.log('[Turnstile] Received verification request');
   console.log('[Turnstile] Request headers:', req.headers);
   console.log('[Turnstile] Request body:', req.body);
