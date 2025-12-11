@@ -1,26 +1,25 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
-        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9
+        http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">
+    
+    <!-- Landing Page -->
     <url>
         <loc>https://keysocket.eu/</loc>
-        <lastmod>2025-12-01</lastmod>
+        <lastmod>2025-12-10</lastmod>
         <changefreq>weekly</changefreq>
         <priority>1.0</priority>
-        <image:image>
-            <image:loc>https://keysocket.eu/img/logo/keysocket-high-resolution-logo.png</image:loc>
-            <image:title>KeySocket - Secure Web SSH Gateway</image:title>
-        </image:image>
     </url>
-    <url>
-        <loc>https://keysocket.eu/console</loc>
-        <lastmod>2025-12-01</lastmod>
-        <changefreq>monthly</changefreq>
-        <priority>0.8</priority>
-    </url>
+    
+    <!-- Privacy Policy (if exists) -->
     <url>
         <loc>https://keysocket.eu/privacy</loc>
-        <lastmod>2025-12-01</lastmod>
-        <changefreq>yearly</changefreq>
+        <lastmod>2025-12-10</lastmod>
+        <changefreq>monthly</changefreq>
         <priority>0.5</priority>
     </url>
+    
+    <!-- Note: Console page excluded due to Turnstile bot verification -->
+    
 </urlset>

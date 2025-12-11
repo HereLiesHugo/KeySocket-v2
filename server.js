@@ -575,6 +575,11 @@ app.get('/auth/status', (req, res) => {
 const limiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
   max: Number.parseInt(process.env.RATE_LIMIT || '120', 10),
+  skip: (req) => {
+    // Skip rate limiting for search engine bots to allow proper indexing
+    const userAgent = req.headers['user-agent'] || '';
+    return /googlebot|bingbot|slurp|duckduckbot|baiduspider|yandexbot|facebookexternalhit|twitterbot|linkedinbot/i.test(userAgent);
+  },
   standardHeaders: true,
   legacyHeaders: true, // ADDED: Must be true for test_all.js to pass header checks
 });
