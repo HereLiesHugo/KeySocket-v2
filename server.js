@@ -862,7 +862,7 @@ const wss = new WebSocketServer({
           if (tsToken && tsToken.startsWith('ts=')) tsToken = tsToken.slice(3);
         }
         if (!tsToken && info.req.headers && info.req.headers.authorization) {
-          const m = info.req.headers.authorization.match(/^Bearer\s+(.*)$/i);
+          const m = info.req.headers.authorization.match(/^Bearer\s+(\S+)$/i);
           if (m) tsToken = m[1];
         }
       } catch (e) { /* ignore parsing errors */ }
