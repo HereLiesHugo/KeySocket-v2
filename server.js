@@ -473,7 +473,7 @@ function cleanupExpiredSessions() {
 cleanupExpiredSessions();
 
 // Run periodic cleanup every 6 hours
-setInterval(cleanupExpiredSessions, 6 * 60 * 60 * 1000);
+setInterval(cleanupExpiredSessions, SESSION_CLEANUP_INTERVAL_MS);
 
 // Clean up expired Turnstile tokens from active sessions
 function cleanupExpiredTurnstileTokens() {
@@ -499,7 +499,7 @@ function cleanupExpiredTurnstileTokens() {
 }
 
 // Run Turnstile token cleanup every 5 minutes
-setInterval(cleanupExpiredTurnstileTokens, 5 * 60 * 1000);
+setInterval(cleanupExpiredTurnstileTokens, TURNSTILE_CLEANUP_INTERVAL_MS);
 
 app.use(passport.initialize());
 app.use(passport.session());
@@ -616,11 +616,23 @@ const ASSET_VERSION = process.env.ASSET_VERSION || (() => {
 function serveConsole(req, res) {
   try {
     const consolePath = path.join(__dirname, 'console.html');
+    
+    // Check if file exists first
+    if (!fs.existsSync(consolePath)) {
+      logger.error('Console HTML file not found', { path: consolePath });
+      return res.status(404).send('Page not found');
+    }
+    
     let html = fs.readFileSync(consolePath, 'utf8');
     html = html.replaceAll(/__ASSET_VERSION__/g, ASSET_VERSION);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     return res.send(html);
   } catch (e) {
+    logger.error('Error serving console page', {
+      error: e.message,
+      stack: e.stack,
+      path: path.join(__dirname, 'console.html')
+    });
     return res.status(500).send('Server error');
   }
 }
@@ -629,11 +641,23 @@ function serveIndex(req, res) {
   try {
     // Always serve the same HTML - let frontend handle authentication logic
     const indexPath = path.join(__dirname, 'index.html');
+    
+    // Check if file exists first
+    if (!fs.existsSync(indexPath)) {
+      logger.error('Index HTML file not found', { path: indexPath });
+      return res.status(404).send('Page not found');
+    }
+    
     let html = fs.readFileSync(indexPath, 'utf8');
     html = html.replaceAll(/__ASSET_VERSION__/g, ASSET_VERSION);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     return res.send(html);
   } catch (e) {
+    logger.error('Error serving index page', {
+      error: e.message,
+      stack: e.stack,
+      path: path.join(__dirname, 'index.html')
+    });
     return res.status(500).send('Server error');
   }
 }
@@ -917,9 +941,131 @@ const sshAttempts = new Map(); // userId -> { count: number, lastAttempt: timest
 const TURNSTILE_SECRET = process.env.TURNSTILE_SECRET || '';
 const TURNSTILE_TOKEN_TTL_MS = Number.parseInt(process.env.TURNSTILE_TOKEN_TTL_MS || String(30 * 1000), 10);
 
+// Configuration constants
+const MAX_IP_SESSIONS = Number.parseInt(process.env.MAX_IP_SESSIONS || '1000', 10); // Limit IP session map size
+const SSH_ATTEMPT_RESET_MS = 15 * 60 * 1000; // 15 minutes
+const SESSION_CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
+const TURNSTILE_CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const WEBSOCKET_PING_INTERVAL_MS = 30000; // 30 seconds
+const GRACEFUL_SHUTDOWN_TIMEOUT_MS = 3000; // 3 seconds
+
+/**
+ * Consume and validate a Turnstile verification token
+ * @param {string} token - The token to validate
+ * @param {string} remoteIp - The IP address attempting to use the token
+ * @returns {boolean} - True if token is valid and consumed, false otherwise
+ */
+function consumeVerifiedToken(token, remoteIp) {
+  if (!token || typeof token !== 'string') {
+    logger.debug('Invalid token format', { token_type: typeof token });
+    return false;
+  }
+
+  if (!sessionStore || typeof sessionStore.all !== 'function') {
+    logger.error('Session store not available for token validation');
+    return false;
+  }
+
+  // Search through all sessions to find matching token
+  // Note: This is synchronous and may be slow with many sessions
+  // Consider implementing a token->sessionId map for better performance
+  try {
+    sessionStore.all((err, sessions) => {
+      if (err) {
+        logger.error('Failed to retrieve sessions for token validation', { error: err.message });
+        return false;
+      }
+
+      if (!sessions) {
+        logger.debug('No sessions found');
+        return false;
+      }
+
+      // Find session with matching token
+      for (const sessionId in sessions) {
+        const session = sessions[sessionId];
+        
+        if (session.turnstileToken === token) {
+          // Check expiration
+          if (!session.turnstileTokenExpires || session.turnstileTokenExpires < Date.now()) {
+            logger.debug('Token expired', {
+              token: token.substring(0, 10) + '...',
+              expires: session.turnstileTokenExpires,
+              now: Date.now()
+            });
+            return false;
+          }
+
+          // Check IP binding if present
+          if (session.turnstileVerifiedIP && session.turnstileVerifiedIP !== remoteIp) {
+            logger.warn('Token IP mismatch', {
+              token: token.substring(0, 10) + '...',
+              expected_ip: session.turnstileVerifiedIP,
+              actual_ip: remoteIp
+            });
+            return false;
+          }
+
+          // Token is valid - consume it (one-time use)
+          delete session.turnstileToken;
+          delete session.turnstileTokenExpires;
+          
+          // Persist the session update
+          sessionStore.set(sessionId, session, (setErr) => {
+            if (setErr) {
+              logger.error('Failed to update session after token consumption', {
+                session_id: sessionId,
+                error: setErr.message
+              });
+            } else {
+              logger.debug('Token consumed successfully', {
+                token: token.substring(0, 10) + '...',
+                session_id: sessionId,
+                ip: remoteIp
+              });
+            }
+          });
+
+          return true;
+        }
+      }
+
+      logger.debug('Token not found in any session', {
+        token: token.substring(0, 10) + '...'
+      });
+      return false;
+    });
+  } catch (error) {
+    logger.error('Error during token validation', {
+      error: error.message,
+      stack: error.stack
+    });
+    return false;
+  }
+
+  return false;
+}
+
 function incrIp(ip) {
   const n = (ipSessions.get(ip) || 0) + 1;
   ipSessions.set(ip, n);
+  
+  // Prevent unbounded growth of ipSessions Map
+  if (ipSessions.size > MAX_IP_SESSIONS) {
+    // Remove oldest entries (simple FIFO cleanup)
+    const entriesToRemove = ipSessions.size - MAX_IP_SESSIONS;
+    let removed = 0;
+    for (const [key] of ipSessions.entries()) {
+      if (removed >= entriesToRemove) break;
+      ipSessions.delete(key);
+      removed++;
+    }
+    logger.debug('IP session map cleanup performed', {
+      removed: removed,
+      current_size: ipSessions.size
+    });
+  }
+  
   return n;
 }
 
@@ -937,9 +1083,9 @@ function safeParseJson(message) {
 function checkSshAttempts(userId) {
   const attempts = sshAttempts.get(userId) || { count: 0, lastAttempt: 0 };
   
-  // Reset counter if last attempt was more than 15 minutes ago
+  // Reset counter if last attempt was more than SSH_ATTEMPT_RESET_MS ago
   const now = Date.now();
-  if (now - attempts.lastAttempt > 15 * 60 * 1000) {
+  if (now - attempts.lastAttempt > SSH_ATTEMPT_RESET_MS) {
     attempts.count = 0;
   }
   
@@ -957,8 +1103,8 @@ function incrementSshAttempts(userId) {
   sshAttempts.set(userId, attempts);
   
   // Clean up old entries periodically
-  if (Math.random() < 0.1) { // 10% chance to clean up
-    const cutoff = Date.now() - 15 * 60 * 1000;
+  if (Math.random() < 0.1) { // 10% chance to clean up. -- Using Math.random() is safe here - only for probabilistic cleanup scheduling, not security
+    const cutoff = Date.now() - SSH_ATTEMPT_RESET_MS;
     for (const [uid, data] of sshAttempts.entries()) {
       if (data.lastAttempt < cutoff) {
         sshAttempts.delete(uid);
@@ -1048,6 +1194,9 @@ function isPrivateOrLocalIP(input) {
   return false;
 }
 
+// Pre-compiled regex patterns for performance
+const IPV4_PATTERN = /\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/;
+
 // Enhanced host validation with DNS rebinding protection
 async function validateHost(hostname, originalHost, sourceIP, userEmail) {
   try {
@@ -1108,7 +1257,7 @@ async function validateHost(hostname, originalHost, sourceIP, userEmail) {
     }
 
     // Check for IP addresses that might have slipped through (e.g., in hostnames)
-    const ipMatch = lowerHost.match(/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/);
+    const ipMatch = lowerHost.match(IPV4_PATTERN);
     if (ipMatch && isPrivateOrLocalIP(ipMatch[0])) {
       logger.warn('SSRF attempt blocked - embedded private IP in hostname', {
         original_host: originalHost,
@@ -1506,7 +1655,7 @@ setInterval(() => {
     ws.isAlive = false;
     ws.ping(() => {});
   });
-}, 30000);
+}, WEBSOCKET_PING_INTERVAL_MS);
 
 server.listen(PORT, HOST, () => {
   logger.info('=== KeySocket Server Started Successfully ===', {
@@ -1599,7 +1748,7 @@ function gracefulShutdown(signal) {
   setTimeout(() => {
     logger.info('Shutdown complete, exiting');
     process.exit(0);
-  }, 3000);
+  }, GRACEFUL_SHUTDOWN_TIMEOUT_MS);
 }
 
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
