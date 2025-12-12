@@ -110,6 +110,14 @@ const REQUIRE_TLS = process.env.REQUIRE_TLS === 'true'; // Fail startup if TLS r
 const TLS_KEY = process.env.TLS_KEY || '/etc/letsencrypt/live/keysocket.eu/privkey.pem';
 const TLS_CERT = process.env.TLS_CERT || '/etc/letsencrypt/live/keysocket.eu/fullchain.pem';
 
+// Configuration constants - defined early to be available throughout the file
+const MAX_IP_SESSIONS = Number.parseInt(process.env.MAX_IP_SESSIONS || '1000', 10); // Limit IP session map size
+const SSH_ATTEMPT_RESET_MS = 15 * 60 * 1000; // 15 minutes
+const SESSION_CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
+const TURNSTILE_CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const WEBSOCKET_PING_INTERVAL_MS = 30000; // 30 seconds
+const GRACEFUL_SHUTDOWN_TIMEOUT_MS = 3000; // 3 seconds
+
 // Basic security
 app.use(helmet({
   contentSecurityPolicy: false, // Disabled: We handle CSP in Nginx
@@ -940,14 +948,6 @@ const sshAttempts = new Map(); // userId -> { count: number, lastAttempt: timest
 // Cloudflare Turnstile config
 const TURNSTILE_SECRET = process.env.TURNSTILE_SECRET || '';
 const TURNSTILE_TOKEN_TTL_MS = Number.parseInt(process.env.TURNSTILE_TOKEN_TTL_MS || String(30 * 1000), 10);
-
-// Configuration constants
-const MAX_IP_SESSIONS = Number.parseInt(process.env.MAX_IP_SESSIONS || '1000', 10); // Limit IP session map size
-const SSH_ATTEMPT_RESET_MS = 15 * 60 * 1000; // 15 minutes
-const SESSION_CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
-const TURNSTILE_CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
-const WEBSOCKET_PING_INTERVAL_MS = 30000; // 30 seconds
-const GRACEFUL_SHUTDOWN_TIMEOUT_MS = 3000; // 3 seconds
 
 /**
  * Consume and validate a Turnstile verification token
