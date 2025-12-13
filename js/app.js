@@ -28,6 +28,28 @@
     const appThemeSelect = document.getElementById('app-theme-select');
     const WebglAddon = (window.WebglAddon && (window.WebglAddon.WebglAddon || window.WebglAddon)) || null;
 
+    // Configuration constants
+    const CONFIG = {
+        TURNSTILE_TOKEN_SAFETY_MARGIN_MS: 2000,  // Safety margin before token expiration
+        BANNER_AUTO_HIDE_MS: 6000,               // Auto-hide banner after 6 seconds
+        RESIZE_DEBOUNCE_MS: 100,                 // Debounce resize events
+        RESIZE_SEND_DELAY_MS: 250,               // Delay before sending resize to server
+        AUTH_CHECK_DELAY_MS: 100,                // Delay before checking auth status
+        TURNSTILE_MAX_RETRIES: 2,                // Max retries for Turnstile verification
+        TURNSTILE_RETRY_BASE_MS: 200,            // Base delay for exponential backoff
+        MAX_SAVED_CONNECTIONS: 20,               // Maximum saved connections in localStorage
+        MIN_TERMINAL_WIDTH: 300,                 // Minimum terminal width in pixels
+        MIN_TERMINAL_HEIGHT: 200,                // Minimum terminal height in pixels
+        PORT_MIN: 1,                             // Minimum valid port number
+        PORT_MAX: 65535                          // Maximum valid port number
+    };
+
+    // Debug mode - enable with ?debug=1 in URL or on localhost
+    const DEBUG = window.location.hostname === 'localhost' || window.location.search.includes('debug=1');
+    function log(...args) {
+        if (DEBUG) console.log(...args);
+    }
+
     function escapeHTML(str) {
         if (str == null) return '';
         return String(str)
@@ -231,6 +253,9 @@
                 container.removeChild(container.firstChild);
             }
             
+            // Use DocumentFragment for batch DOM updates (reduces reflows)
+            const fragment = document.createDocumentFragment();
+            
             layout.forEach(row => {
                 const rowDiv = document.createElement('div');
                 rowDiv.className = 'keyboard-row';
@@ -254,8 +279,11 @@
                     rowDiv.appendChild(btn);
                 });
                 
-                container.appendChild(rowDiv);
+                fragment.appendChild(rowDiv);
             });
+            
+            // Single DOM update instead of multiple
+            container.appendChild(fragment);
 
             const shiftKeys = container.querySelectorAll('[data-code="ShiftLeft"], [data-code="ShiftRight"]');
             shiftKeys.forEach(k => k.classList.toggle('keyboard-key--active', state.shift));
@@ -290,6 +318,11 @@
     let ksTurnstileRendered = false;
     let ksIsAuthenticated = false;
 
+    // Memory leak prevention - track event listeners and observers for cleanup
+    let resizeListener = null;
+    let resizeObserver = null;
+    let resizeTimeout = null;
+
     let uiBannerTimer = null;
 
     function showConnectionBanner(message, kind) {
@@ -306,7 +339,7 @@
         authBannerEl.hidden = false;
         uiBannerTimer = setTimeout(() => {
             authBannerEl.hidden = true;
-        }, 6000);
+        }, CONFIG.BANNER_AUTO_HIDE_MS);
     }
 
     function setAuthUI() {
@@ -401,16 +434,28 @@
         return url;
     }
 
+    // Cache for localStorage connections to reduce JSON.parse calls
+    let connectionsCache = null;
+
     function getConnections() {
+        if (connectionsCache) return connectionsCache;
         try {
-            return JSON.parse(localStorage.getItem('ks_connections') || '[]');
+            connectionsCache = JSON.parse(localStorage.getItem('ks_connections') || '[]');
+            return connectionsCache;
         } catch (e) {
+            log('Error parsing connections from localStorage:', e);
+            connectionsCache = [];
             return [];
         }
     }
 
     function setConnections(list) {
-        localStorage.setItem('ks_connections', JSON.stringify(list.slice(0, 20)));
+        connectionsCache = list.slice(0, CONFIG.MAX_SAVED_CONNECTIONS);
+        try {
+            localStorage.setItem('ks_connections', JSON.stringify(connectionsCache));
+        } catch (e) {
+            log('Error saving connections to localStorage:', e);
+        }
     }
 
     function renderAppManagementConnections(list) {
@@ -782,10 +827,44 @@
         try { term.clear(); } catch (e) {}
         try { term.focus(); } catch (e) {}
 
+        // Input validation
+        if (!form.host.value || !form.host.value.trim()) {
+            showConnectionBanner('Please enter a host address.', 'error');
+            try { term.writeln('\r\n[ERROR] Host address is required'); } catch (e) {}
+            return;
+        }
+        
+        const port = parseInt(form.port.value || '22', 10);
+        if (isNaN(port) || port < CONFIG.PORT_MIN || port > CONFIG.PORT_MAX) {
+            showConnectionBanner(`Port must be between ${CONFIG.PORT_MIN} and ${CONFIG.PORT_MAX}.`, 'error');
+            try { term.writeln(`\r\n[ERROR] Invalid port: ${form.port.value}`); } catch (e) {}
+            return;
+        }
+        
+        if (!form.username.value || !form.username.value.trim()) {
+            showConnectionBanner('Please enter a username.', 'error');
+            try { term.writeln('\r\n[ERROR] Username is required'); } catch (e) {}
+            return;
+        }
+        
+        if (authSelect && authSelect.value === 'password') {
+            if (!form.password.value) {
+                showConnectionBanner('Please enter a password.', 'error');
+                try { term.writeln('\r\n[ERROR] Password is required'); } catch (e) {}
+                return;
+            }
+        } else {
+            if (!privateKeyText) {
+                showConnectionBanner('Please select a private key file.', 'error');
+                try { term.writeln('\r\n[ERROR] Private key is required'); } catch (e) {}
+                return;
+            }
+        }
+
         // FIXED: Always require a token, even if authenticated.
         const now = Date.now();
-        if (!ksTurnstileToken || (ksTurnstileTTL && (now > (ksTurnstileVerifiedAt + ksTurnstileTTL - 2000)))) {
-            // token missing or expired (with 2s safety margin) -> re-run Turnstile
+        if (!ksTurnstileToken || (ksTurnstileTTL && (now > (ksTurnstileVerifiedAt + ksTurnstileTTL - CONFIG.TURNSTILE_TOKEN_SAFETY_MARGIN_MS)))) {
+            // token missing or expired (with safety margin) -> re-run Turnstile
             reRunTurnstile();
             try { term.writeln('\r\n[INFO] Turnstile token missing or expired; please complete verification.'); } catch (e) {}
             showConnectionBanner('Turnstile verification required before connecting.', 'info');
@@ -877,34 +956,66 @@
             });
         }
 
-        // resize handling
+        // resize handling with debouncing
         function sendResize() {
             if (!socket || socket.readyState !== WebSocket.OPEN) return;
             const cols = term.cols;
             const rows = term.rows;
             socket.send(JSON.stringify({ type: 'resize', cols, rows }));
         }
+        
         function doResize() {
-            if (fit && typeof fit.fit === 'function') {
-                try { fit.fit(); } catch (e) { console.error('fit.fit error:', e); }
+            // Debounce resize events to reduce unnecessary calls
+            if (resizeTimeout) clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                if (fit && typeof fit.fit === 'function') {
+                    try { fit.fit(); } catch (e) { log('fit.fit error:', e); }
+                }
+                sendResize();
+                resizeTimeout = null;
+            }, CONFIG.RESIZE_DEBOUNCE_MS);
+        }
+        
+        // Setup resize handlers with cleanup tracking
+        function setupResizeHandlers() {
+            resizeListener = doResize;
+            window.addEventListener('resize', resizeListener);
+            
+            // Watch for terminal-area resizing
+            try {
+                resizeObserver = new ResizeObserver(() => { doResize(); });
+                if (terminalArea) resizeObserver.observe(terminalArea);
+            } catch (e) {
+                // ResizeObserver might not be available in some environments
+                log('ResizeObserver not available:', e);
             }
-            sendResize();
         }
-        window.addEventListener('resize', doResize);
-        // Watch for terminal-area resizing
-        try {
-            const resizeObserver = new ResizeObserver(() => { doResize(); });
-            if (terminalArea) resizeObserver.observe(terminalArea);
-        } catch (e) {
-            // ResizeObserver might not be available in some environments
+        
+        setupResizeHandlers();
+        setTimeout(sendResize, CONFIG.RESIZE_SEND_DELAY_MS);
+    }
+
+    // Cleanup function to prevent memory leaks
+    function cleanupResizeHandlers() {
+        if (resizeListener) {
+            window.removeEventListener('resize', resizeListener);
+            resizeListener = null;
         }
-        setTimeout(sendResize, 250);
+        if (resizeObserver) {
+            resizeObserver.disconnect();
+            resizeObserver = null;
+        }
+        if (resizeTimeout) {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = null;
+        }
     }
 
     function disconnect() {
         if (!socket) return;
         try { socket.close(); } catch (e) {}
         socket = null;
+        cleanupResizeHandlers();
         if (connectBtn) connectBtn.disabled = false;
         if (disconnectBtn) disconnectBtn.disabled = true;
     }
@@ -920,7 +1031,7 @@
                 method: 'GET',
                 credentials: 'same-origin'
             }).then(r => r.json()).then(data => {
-                console.log('Auth status check:', data);
+                log('Auth status check:', data);
                 ksIsAuthenticated = !!(data && data.authenticated);
                 if (ksIsAuthenticated) {
                     // FIXED: Do NOT skip Turnstile. We need the token for the WebSocket.
@@ -931,16 +1042,16 @@
                     
                     // Always initialize turnstile to ensure we can get a token
                     initTurnstile(); 
-                    console.log('User authenticated, Turnstile ready for connection verification');
+                    log('User authenticated, Turnstile ready for connection verification');
                 } else {
                     // User not authenticated, show Turnstile overlay
                     initTurnstile();
                 }
             }).catch(err => {
-                console.log('Auth check failed, showing Turnstile', err);
+                log('Auth check failed, showing Turnstile', err);
                 initTurnstile();
             });
-        }, 100); // 100ms delay
+        }, CONFIG.AUTH_CHECK_DELAY_MS);
     }
 
     // Turnstile handling on site enter
@@ -1001,8 +1112,7 @@
     }
 
     function verifyTurnstileToken(token, attempt = 0) {
-        const MAX = 2; // client-side retries
-        const backoff = 200 * Math.pow(2, attempt);
+        const backoff = CONFIG.TURNSTILE_RETRY_BASE_MS * Math.pow(2, attempt);
         return fetch('/turnstile-verify', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1010,7 +1120,7 @@
             credentials: 'same-origin'
         }).then(res => {
             if (res.status >= 500) {
-                if (attempt < MAX) {
+                if (attempt < CONFIG.TURNSTILE_MAX_RETRIES) {
                     return new Promise((resolve, reject) => setTimeout(() => verifyTurnstileToken(token, attempt + 1).then(resolve).catch(reject), backoff));
                 }
                 throw new Error('Verification provider unavailable (server error). Please try again later.');
@@ -1119,4 +1229,12 @@
     // show login result feedback and then check auth status
     showAuthBannerFromQuery();
     checkAuthStatus();
+
+    // Cleanup on page unload to prevent resource leaks
+    window.addEventListener('beforeunload', () => {
+        if (socket) {
+            try { socket.close(); } catch (e) {}
+        }
+        cleanupResizeHandlers();
+    });
 })();
