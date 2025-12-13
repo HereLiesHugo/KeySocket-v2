@@ -17,6 +17,7 @@ const { URL } = require('url');
 const cookie = require('cookie');
 const cookieParser = require('cookie-parser');
 const dns = require('dns').promises; // ADDED: Required for SSRF fix
+const { consumeVerifiedToken } = require('./lib/turnstile');
 
 // Enhanced logging system
 const logFile = path.join(__dirname, 'server.log');
@@ -901,25 +902,32 @@ const wss = new WebSocketServer({
 
       // If a token is provided, consume and bind it to this session (persisting turnstileVerifiedIP)
       if (tsToken) {
-        if (!consumeVerifiedToken(tsToken, remoteIp)) {
-          logger.warn('WebSocket upgrade rejected: invalid/expired turnstile token', { ip: remoteIp, user: sessionData.user.email });
-          done(false, 401, 'Invalid turnstile token');
-          return;
-        }
-
-        // Persist binding to session so subsequent upgrades from same session validate
-        try {
-          const sess = sessionData.session || {};
-          sess.turnstileVerifiedIP = remoteIp;
-          // write back to session store (best-effort)
-          if (sessionData.sessionId && sessionStore && typeof sessionStore.set === 'function') {
-            sessionStore.set(sessionData.sessionId, sess, (err) => {
-              if (err) logger.warn('Failed to persist turnstileVerifiedIP to session', { session_id: sessionData.sessionId, error: err.message });
-            });
+        consumeVerifiedToken(tsToken, remoteIp, sessionStore, logger, (isValid) => {
+          if (!isValid) {
+            logger.warn('WebSocket upgrade rejected: invalid/expired turnstile token', { ip: remoteIp, user: sessionData.user.email });
+            done(false, 401, 'Invalid turnstile token');
+            return;
           }
-        } catch (e) {
-          logger.warn('Failed to bind turnstile token to session', { error: e.message });
-        }
+
+          // Persist binding to session so subsequent upgrades from same session validate
+          try {
+            const sess = sessionData.session || {};
+            sess.turnstileVerifiedIP = remoteIp;
+            // write back to session store (best-effort)
+            if (sessionData.sessionId && sessionStore && typeof sessionStore.set === 'function') {
+              sessionStore.set(sessionData.sessionId, sess, (err) => {
+                if (err) logger.warn('Failed to persist turnstileVerifiedIP to session', { session_id: sessionData.sessionId, error: err.message });
+              });
+            }
+          } catch (e) {
+            logger.warn('Failed to bind turnstile token to session', { error: e.message });
+          }
+
+          logger.info('WebSocket upgrade accepted', { ip: remoteIp, user: sessionData.user.email });
+          info.req.sessionData = sessionData;
+          done(true);
+        });
+        return;
       } else {
         // No token provided on upgrade — require session to have an IP-bound turnstile verification
         if (!sessionData.turnstileVerifiedIP || sessionData.turnstileVerifiedIP !== remoteIp) {
@@ -955,96 +963,7 @@ const TURNSTILE_TOKEN_TTL_MS = Number.parseInt(process.env.TURNSTILE_TOKEN_TTL_M
  * @param {string} remoteIp - The IP address attempting to use the token
  * @returns {boolean} - True if token is valid and consumed, false otherwise
  */
-function consumeVerifiedToken(token, remoteIp) {
-  if (!token || typeof token !== 'string') {
-    logger.debug('Invalid token format', { token_type: typeof token });
-    return false;
-  }
-
-  if (!sessionStore || typeof sessionStore.all !== 'function') {
-    logger.error('Session store not available for token validation');
-    return false;
-  }
-
-  // Search through all sessions to find matching token
-  // Note: This is synchronous and may be slow with many sessions
-  // Consider implementing a token->sessionId map for better performance
-  try {
-    sessionStore.all((err, sessions) => {
-      if (err) {
-        logger.error('Failed to retrieve sessions for token validation', { error: err.message });
-        return false;
-      }
-
-      if (!sessions) {
-        logger.debug('No sessions found');
-        return false;
-      }
-
-      // Find session with matching token
-      for (const sessionId in sessions) {
-        const session = sessions[sessionId];
-        
-        if (session.turnstileToken === token) {
-          // Check expiration
-          if (!session.turnstileTokenExpires || session.turnstileTokenExpires < Date.now()) {
-            logger.debug('Token expired', {
-              token: token.substring(0, 10) + '...',
-              expires: session.turnstileTokenExpires,
-              now: Date.now()
-            });
-            return false;
-          }
-
-          // Check IP binding if present
-          if (session.turnstileVerifiedIP && session.turnstileVerifiedIP !== remoteIp) {
-            logger.warn('Token IP mismatch', {
-              token: token.substring(0, 10) + '...',
-              expected_ip: session.turnstileVerifiedIP,
-              actual_ip: remoteIp
-            });
-            return false;
-          }
-
-          // Token is valid - consume it (one-time use)
-          delete session.turnstileToken;
-          delete session.turnstileTokenExpires;
-          
-          // Persist the session update
-          sessionStore.set(sessionId, session, (setErr) => {
-            if (setErr) {
-              logger.error('Failed to update session after token consumption', {
-                session_id: sessionId,
-                error: setErr.message
-              });
-            } else {
-              logger.debug('Token consumed successfully', {
-                token: token.substring(0, 10) + '...',
-                session_id: sessionId,
-                ip: remoteIp
-              });
-            }
-          });
-
-          return true;
-        }
-      }
-
-      logger.debug('Token not found in any session', {
-        token: token.substring(0, 10) + '...'
-      });
-      return false;
-    });
-  } catch (error) {
-    logger.error('Error during token validation', {
-      error: error.message,
-      stack: error.stack
-    });
-    return false;
-  }
-
-  return false;
-}
+// Turnstile token validation logic moved to lib/turnstile.js
 
 function incrIp(ip) {
   const n = (ipSessions.get(ip) || 0) + 1;
