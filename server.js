@@ -80,8 +80,12 @@ const app = express();
 // ensure secure cookies (sessions) work when behind a proxy/CDN like Cloudflare
 // Allow explicit override with BEHIND_PROXY env var. Default to true (assume proxy in front).
 const BEHIND_PROXY = typeof process.env.BEHIND_PROXY !== 'undefined' ? (process.env.BEHIND_PROXY === 'true') : true;
-app.set('trust proxy', BEHIND_PROXY);
-logger.info('trust proxy set', { trust_proxy: BEHIND_PROXY });
+
+// Secure 'trust proxy' setting: defaults to 1 (only the first proxy), or allow explicit override.
+// 'true' is explicitly unsafe for rate-limit, so we map boolean true to number 1.
+const trustProxyConfig = BEHIND_PROXY ? (process.env.TRUST_PROXY || 1) : false;
+app.set('trust proxy', trustProxyConfig);
+logger.info('trust proxy set', { trust_proxy: trustProxyConfig });
 
 // Passport session setup
 passport.serializeUser((user, done) => done(null, user));
