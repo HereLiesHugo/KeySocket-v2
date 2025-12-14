@@ -1,8 +1,10 @@
+/* ============================================================================
+   RESET & BASE STYLES
+   ============================================================================ */
 html {
   scroll-behavior: smooth;
 }
 
-/* Reset and Base Styles */
 * {
   margin: 0;
   padding: 0;
@@ -10,6 +12,7 @@ html {
 }
 
 :root {
+  /* Colors */
   --primary-color: #3b82f6;
   --primary-dark: #2563eb;
   --secondary-color: #94a3b8;
@@ -17,17 +20,25 @@ html {
   --danger-color: #ef4444;
   --warning-color: #f59e0b;
   --success-color: #22c55e;
+  
+  /* Backgrounds */
   --bg-primary: #0f172a;
   --bg-secondary: #1e293b;
   --bg-dark: #334155;
+  
+  /* Text */
   --text-primary: #f8fafc;
   --text-secondary: #cbd5e1;
   --text-light: #94a3b8;
+  
+  /* UI Elements */
   --border-color: #334155;
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4);
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.5);
   --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.6);
+  
+  /* Typography */
   --font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     sans-serif;
 }
@@ -46,7 +57,9 @@ body {
   padding: 0 20px;
 }
 
-/* Navigation */
+/* ============================================================================
+   NAVIGATION
+   ============================================================================ */
 .navbar {
   position: fixed;
   top: 0;
@@ -187,7 +200,9 @@ body {
   transition: 0.3s;
 }
 
-/* Hero Section */
+/* ============================================================================
+   HERO SECTION
+   ============================================================================ */
 .hero {
   padding: 120px 0 80px;
   background: linear-gradient(
@@ -254,7 +269,9 @@ body {
   flex-wrap: wrap;
 }
 
-/* Buttons */
+/* ============================================================================
+   BUTTONS
+   ============================================================================ */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -314,7 +331,9 @@ body {
   transform: translateY(-2px);
 }
 
-/* Terminal Preview */
+/* ============================================================================
+   TERMINAL PREVIEW
+   ============================================================================ */
 .hero-image {
   display: flex;
   justify-content: center;
@@ -352,15 +371,9 @@ body {
   border-radius: 50%;
 }
 
-.btn-red {
-  background: #ef4444;
-}
-.btn-yellow {
-  background: #f59e0b;
-}
-.btn-green {
-  background: #22c55e;
-}
+.btn-red { background: #ef4444; }
+.btn-yellow { background: #f59e0b; }
+.btn-green { background: #22c55e; }
 
 .terminal-title {
   color: var(--text-light);
@@ -403,36 +416,9 @@ body {
   animation: fadeIn 0.5s 2.2s forwards, blink 1s 2.7s infinite;
 }
 
-@keyframes typing {
-  from {
-    width: 0;
-  }
-  to {
-    width: 100%;
-  }
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes blink {
-  0%,
-  50% {
-    opacity: 1;
-  }
-  51%,
-  100% {
-    opacity: 0;
-  }
-}
-
-/* Section Styles */
+/* ============================================================================
+   SECTIONS & FEATURES
+   ============================================================================ */
 .section-title {
   font-size: 2.5rem;
   font-weight: 700;
@@ -454,7 +440,6 @@ body {
   border-radius: 2px;
 }
 
-/* Features Section */
 .features {
   padding: 80px 0;
   background: var(--bg-secondary);
@@ -510,7 +495,9 @@ body {
   line-height: 1.6;
 }
 
-/* How It Works Section */
+/* ============================================================================
+   HOW IT WORKS
+   ============================================================================ */
 .how-it-works {
   padding: 80px 0;
   background: var(--bg-primary);
@@ -560,7 +547,9 @@ body {
   line-height: 1.6;
 }
 
-/* Security Section */
+/* ============================================================================
+   SECURITY & DEMO
+   ============================================================================ */
 .security {
   padding: 80px 0;
   background: var(--bg-secondary);
@@ -604,7 +593,6 @@ body {
   line-height: 1.6;
 }
 
-/* Terminal Demo Section */
 .terminal-demo {
   padding: 80px 0;
   background: var(--bg-primary);
@@ -644,7 +632,9 @@ body {
   gap: 1rem;
 }
 
-/* Contact Section */
+/* ============================================================================
+   CONTACT
+   ============================================================================ */
 .contact {
   padding: 80px 0;
   background: var(--bg-secondary);
@@ -724,7 +714,9 @@ body {
   min-height: 120px;
 }
 
-/* Footer */
+/* ============================================================================
+   FOOTER
+   ============================================================================ */
 .footer {
   background: var(--bg-dark);
   color: var(--text-light);
@@ -772,7 +764,9 @@ body {
   color: var(--primary-color);
 }
 
-/* Animations */
+/* ============================================================================
+   ANIMATIONS
+   ============================================================================ */
 @keyframes fadeInUp {
   from {
     opacity: 0;
@@ -806,6 +800,24 @@ body {
   }
 }
 
+@keyframes typing {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+/* ============================================================================
+   RESPONSIVE DESIGN
+   ============================================================================ */
 /* Tablet Responsive - Fix Ko-fi button clipping */
 @media (max-width: 1024px) and (min-width: 769px) {
   .nav-menu {
@@ -827,22 +839,26 @@ body {
 }
 
 /* Mobile Responsive */
-@media (max-width: 768px) {
+@media screen and (max-width: 768px) {
   .nav-menu {
     position: fixed;
-    left: -100%;
+    right: -100%; /* Changed from left: -100% */
     top: 70px;
     flex-direction: column;
     background-color: var(--bg-primary);
-    width: 100%;
-    text-align: center;
-    transition: 0.3s;
-    box-shadow: var(--shadow-lg);
-    padding: 2rem 0;
+    width: 80%; /* Added */
+    max-width: 300px; /* Added */
+    height: calc(100vh - 70px); /* Added */
+    align-items: center; /* Added */
+    justify-content: center; /* Added */
+    transition: 0.3s ease-in-out; /* Changed from 0.3s */
+    box-shadow: -5px 0 15px rgba(0,0,0,0.5); /* Changed from var(--shadow-lg) */
+    border-left: 1px solid var(--border-color); /* Added */
+    padding: 0; /* Removed padding: 2rem 0; */
   }
 
   .nav-menu.active {
-    left: 0;
+    right: 0; /* Changed from left: 0 */
   }
 
   .nav-toggle {
@@ -864,7 +880,7 @@ body {
   .hero-container {
     grid-template-columns: 1fr;
     text-align: center;
-    gap: 2rem;
+    gap: 3rem; /* Changed from 2rem */
   }
 
   .hero-title {

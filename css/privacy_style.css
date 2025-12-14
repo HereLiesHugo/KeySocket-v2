@@ -1,4 +1,6 @@
-/* Reset and Base Styles */
+/* ============================================================================
+   RESET & BASE STYLES
+   ============================================================================ */
 * {
     margin: 0;
     padding: 0;
@@ -6,6 +8,7 @@
 }
 
 :root {
+    /* Colors */
     --primary-color: #3b82f6;
     --primary-dark: #2563eb;
     --secondary-color: #94a3b8;
@@ -13,17 +16,25 @@
     --danger-color: #ef4444;
     --warning-color: #f59e0b;
     --success-color: #22c55e;
+    
+    /* Backgrounds */
     --bg-primary: #0f172a;
     --bg-secondary: #1e293b;
     --bg-dark: #334155;
+    
+    /* Text */
     --text-primary: #f8fafc;
     --text-secondary: #cbd5e1;
     --text-light: #94a3b8;
+    
+    /* UI Elements */
     --border-color: #334155;
     --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
     --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4);
     --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.5);
     --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.6);
+    
+    /* Typography */
     --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
@@ -35,7 +46,9 @@ body {
     overflow-x: hidden;
 }
 
-/* Privacy Page Styles */
+/* ============================================================================
+   PRIVACY PAGE LAYOUT
+   ============================================================================ */
 .privacy-container {
     max-width: 800px;
     margin: 0 auto;
@@ -93,6 +106,9 @@ body {
     margin-bottom: 15px;
 }
 
+/* ============================================================================
+   TABLE STYLES
+   ============================================================================ */
 .data-table {
     width: 100%;
     border-collapse: collapse;
@@ -120,6 +136,9 @@ body {
     background: var(--bg-secondary);
 }
 
+/* ============================================================================
+   SECURITY COMMITMENT
+   ============================================================================ */
 .security-commitment {
     background: linear-gradient(135deg, var(--success-color), #059669);
     color: white;
@@ -130,6 +149,9 @@ body {
     box-shadow: var(--shadow-md);
 }
 
+/* ============================================================================
+   CONTACT & NAVIGATION
+   ============================================================================ */
 .contact-info {
     background: var(--bg-secondary);
     padding: 20px;
@@ -167,6 +189,9 @@ body {
     margin-right: 8px;
 }
 
+/* ============================================================================
+   RESPONSIVE DESIGN
+   ============================================================================ */
 @media (max-width: 768px) {
     .privacy-container {
         margin: 20px;
