@@ -171,6 +171,21 @@
                         <td>IP Address, User Agent</td>
                     </tr>
                     <tr>
+                        <td>Google Fonts</td>
+                        <td>Typography</td>
+                        <td>IP Address, User Agent (Request Log)</td>
+                    </tr>
+                    <tr>
+                        <td>cdnjs</td>
+                        <td>Icons & Libraries</td>
+                        <td>IP Address, User Agent</td>
+                    </tr>
+                    <tr>
+                        <td>Ko-fi</td>
+                        <td>Donations</td>
+                        <td>None (External Link - User leaves site)</td>
+                    </tr>
+                    <tr>
                         <td>OVH Hosting</td>
                         <td>Infrastructure</td>
                         <td>None (Infrastructure Provider)</td>
@@ -188,6 +203,7 @@
                 <li><strong>User Sessions:</strong> Stored for 24 hours. Expired sessions are automatically deleted from our server every 6 hours.</li>
                 <li><strong>SSH Credentials:</strong> 0 seconds retention. Discarded immediately upon connection closure.</li>
                 <li><strong>Server Logs:</strong> Retained for 30 days for security auditing, then overwritten.</li>
+                <li><strong>Rate Limiting Data:</strong> Stored in memory for 1 minute to prevent abuse.</li>
             </ul>
         </div>
 
@@ -206,6 +222,7 @@
             <ul>
                 <li><strong>Encryption in Transit:</strong> All traffic between your browser and KeySocket.eu is encrypted via HTTPS/TLS.</li>
                 <li><strong>SSRF Protection:</strong> We validate all destination IP addresses to prevent internal network scanning.</li>
+                <li><strong>Rate Limiting:</strong> We strictly limit request rates to prevent brute-force and DDoS attacks.</li>
                 <li><strong>No credential logging:</strong> Our logging system is configured to exclude passwords and private keys.</li>
             </ul>
         </div>
