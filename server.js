@@ -134,16 +134,11 @@ app.use((req, res, next) => {
   if (!res.getHeader('Content-Security-Policy')) {
     res.setHeader("Content-Security-Policy", 
       "default-src 'self'; " +
-      "script-src 'self' 'unsafe-eval' 'unsafe-inline' " +
-        "'sha256-51AbVm95/bXyZWOhL4XUEH7oO//14QSsMzS9dJ4HAHI=' " +
-        "'sha256-YjP9NejlrkKr07NlpI0X4jV+JyxjWifNyQbWA/sqfu8=' " +
-        "'sha256-gj6IB38jtvdWbaqYbrth6Tfn/uGW8gNDaQX5n47a/rY=' " +
-        "'sha256-b5ZZ7GeGNY3rnCsgVzgKDt3i/OU504qSTwaIOSqu0xA=' " +
-        "'sha256-zJ0i5jxdSrH1FnKjFTtqndCZv4sOOinr2V0FYy/qUYM=' " +
         "'sha256-GAEWvptc7gBRWsWwhJ4hc8G4xPAH6dlDCDRyN3QrxQg=' " +
         "'sha256-XE/rk1B1hi3MM4L/gFLf0ld8k4UBfe30haqIxm4Om+0=' " +
         "'sha256-sSE0eU9JEHCECAOMSXkHIyD43AmAVBPvw56cdRedOyI=' " +
-        "https://challenges.cloudflare.com " +
+        "https://challenges.cloudflare.com " + // Removed unsafe-eval and unsafe-inline
+        "https://cdn.jsdelivr.net " +
         "https://cdn.jsdelivr.net " +
         "https://static.cloudflareinsights.com; " +
       "style-src 'self' 'unsafe-inline' " +
@@ -405,8 +400,8 @@ logger.info('Session configuration', {
 const sessionMiddleware = session(sessionConfig);
 app.use(sessionMiddleware);
 
-console.log(`[Server] Session store type: ${typeof sessionStore}`);
-console.log(`[Server] Session store has get method: ${typeof sessionStore.get}`);
+logger.info(`Session store type: ${typeof sessionStore}`);
+logger.info(`Session store has get method: ${typeof sessionStore.get}`);
 
 // Clean up expired sessions on startup
 function cleanupExpiredSessions() {
@@ -687,13 +682,14 @@ app.get('/health', (req, res) => res.json({ ok: true, env: process.env.NODE_ENV 
 
 // Turnstile verification endpoint - accepts a client token and verifies with Cloudflare
 app.post('/turnstile-verify', (req, res) => {
-  console.log('[Turnstile] Received verification request');
-  console.log('[Turnstile] Request headers:', req.headers);
-  console.log('[Turnstile] Request body:', req.body);
+  logger.info('[Turnstile] Received verification request', {
+    headers: req.headers,
+    body: (req.body && req.body.token) ? 'token_present' : 'missing_token'
+  });
   const token = (req.body && req.body.token) || '';
   if (!token) return res.status(400).json({ ok: false, message: 'missing token' });
   if (!TURNSTILE_SECRET) {
-    console.error('TURNSTILE_SECRET not configured in environment');
+    logger.error('TURNSTILE_SECRET not configured in environment');
     return res.status(500).json({ ok: false, message: 'server misconfigured: TURNSTILE_SECRET not set' });
   }
 
@@ -851,7 +847,7 @@ if (USE_TLS && fs.existsSync(TLS_KEY) && fs.existsSync(TLS_CERT)) {
       key_exists: fs.existsSync(TLS_KEY),
       cert_exists: fs.existsSync(TLS_CERT)
     });
-    console.error('FATAL: REQUIRE_TLS=true but TLS certificates not found. Exiting.');
+    logger.error('FATAL: REQUIRE_TLS=true but TLS certificates not found. Exiting.');
     process.exit(1);
   } else {
     logger.warn('USE_TLS=true set but certificate files not found; falling back to HTTP', {
@@ -866,7 +862,7 @@ if (USE_TLS && fs.existsSync(TLS_KEY) && fs.existsSync(TLS_CERT)) {
   // HTTP explicitly requested
   if (REQUIRE_TLS) {
     logger.error('REQUIRE_TLS=true but USE_TLS=false. TLS enforcement misconfiguration.');
-    console.error('FATAL: REQUIRE_TLS=true but USE_TLS=false. Exiting.');
+    logger.error('FATAL: REQUIRE_TLS=true but USE_TLS=false. Exiting.');
     process.exit(1);
   } else {
     logger.info('Starting HTTP server (TLS disabled)');
@@ -906,7 +902,7 @@ const wss = new WebSocketServer({
 
       // If a token is provided, consume and bind it to this session (persisting turnstileVerifiedIP)
       if (tsToken) {
-        consumeVerifiedToken(tsToken, remoteIp, sessionStore, logger, (isValid) => {
+        consumeVerifiedToken(tsToken, sessionData.sessionId, remoteIp, sessionStore, logger, (isValid) => {
           if (!isValid) {
             logger.warn('WebSocket upgrade rejected: invalid/expired turnstile token', { ip: remoteIp, user: sessionData.user.email });
             done(false, 401, 'Invalid turnstile token');
@@ -1311,7 +1307,7 @@ wss.on('connection', (ws, req) => {
     user_name: sessionData.user.name
   });
 
-  console.log(`[WebSocket] New SSH connection from ${ip} for user ${sessionData.user.email} (${sessionData.user.name})`);
+  logger.info(`[WebSocket] New SSH connection`, { ip, user_email: sessionData.user.email, user_name: sessionData.user.name });
 
   const concurrent = incrIp(ip);
   if (concurrent > CONCURRENT_PER_IP) {
@@ -1594,10 +1590,10 @@ server.listen(PORT, HOST, () => {
     log_level: logLevel
   });
 
-  console.log(`\n🚀 KeySocket Server listening on ${HOST}:${PORT}`);
-  console.log(`📝 Logs: ${logFile}`);
-  console.log(`🔐 Authentication: Google OAuth + Turnstile`);
-  console.log(`🛡️  SSRF Protection: Enabled (DNS Resolution + IP Validation)`);
+  logger.info(`KeySocket Server listening on ${HOST}:${PORT}`);
+  logger.info(`Logs: ${logFile}`);
+  logger.info(`Authentication: Google OAuth + Turnstile`);
+  logger.info(`SSRF Protection: Enabled (DNS Resolution + IP Validation)`);
   console.log(`💾 Session Storage: FileStore (${sessionsDir})`);
   console.log(`🗑️  Session Cleanup: Every 6 hours (24h TTL)\n`);
 });
