@@ -150,6 +150,7 @@ const servePage = (file) => (req, res) => {
     if (!fs.existsSync(p)) return res.status(404).send('Not Found');
     let html = fs.readFileSync(p, 'utf8');
     html = html.replaceAll(/__ASSET_VERSION__/g, ASSET_VERSION);
+    html = html.replaceAll(/__TURNSTILE_SITEKEY__/g, process.env.TURNSTILE_SITEKEY || '');
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(html);
   } catch (e) {

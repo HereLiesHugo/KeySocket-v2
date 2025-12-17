@@ -25,23 +25,105 @@ export function initUI(termModule, sendToSocket) {
     // Keyboard Logic
     const container = document.querySelector('.keyboard-container');
     if (container) {
-        // Simplified Virtual Keyboard Init (Ported from original)
-        // ... (For brevity, I will include a basic version or the full one if needed. 
-        // User said "do this" to modularizing, so I should try to preserve functionality).
-        // I will re-implement the renderer logic briefly.
+        // Virtual Keyboard Implementation
+        const rows = [
+            ['Esc', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', 'Bksp'],
+            ['Tab', 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\\'],
+            ['Caps', 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', "'", 'Enter'],
+            ['Shift', 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/', 'Up'],
+            ['Ctrl', 'Alt', 'Space', 'Left', 'Down', 'Right']
+        ];
         
-        const state = { shift: false, ctrl: false, layout: 'qwerty' };
-        // ... Layout definitions would be large. 
-        // I will assume for this step I can put the full logic in.
-        // Due to strict output limits, I might need to be concise.
+        const state = { shift: false, ctrl: false, caps: false };
+        let html = '<div class="vk-board">';
         
-        container.innerHTML = '<div style="padding:10px; text-align:center; color: #888;">Virtual Keyboard Loaded (Module)</div>';
-        
-        // Setup listener
+        rows.forEach(row => {
+            html += '<div class="vk-row">';
+            row.forEach(key => {
+                let label = key;
+                let classes = 'vk-key';
+                if (['Esc', 'Bksp', 'Tab', 'Caps', 'Shift', 'Enter', 'Ctrl', 'Alt', 'Up', 'Left', 'Down', 'Right'].includes(key)) {
+                    classes += ' vk-special';
+                }
+                if (key === 'Space') classes += ' vk-space';
+                
+                html += `<button type="button" class="${classes}" data-key="${key}">${label}</button>`;
+            });
+            html += '</div>';
+        });
+        html += '</div>';
+        container.innerHTML = html;
+
+        // Event Handling
         container.addEventListener('click', (e) => {
-             // ... logic utilizing sendToSocket(data)
-             // For now, placeholder or minimal. 
-             // Ideally I'd paste the full 150 lines of keyboard code here.
+            const btn = e.target.closest('.vk-key');
+            if (!btn) return;
+            e.preventDefault(); // prevent focus loss from terminal
+            
+            const key = btn.dataset.key;
+            
+            // Modifier Toggles
+            if (key === 'Shift') {
+                state.shift = !state.shift;
+                btn.classList.toggle('active', state.shift);
+                return;
+            }
+            if (key === 'Ctrl') {
+                state.ctrl = !state.ctrl;
+                btn.classList.toggle('active', state.ctrl);
+                return;
+            }
+            if (key === 'Caps') {
+                state.caps = !state.caps;
+                btn.classList.toggle('active', state.caps);
+                return;
+            }
+
+            // Character sending
+            let charToSend = '';
+            
+            // Special Keys
+            const special = {
+                'Esc': '\x1b',
+                'Tab': '\t',
+                'Bksp': '\x7f',
+                'Enter': '\r',
+                'Up': '\x1b[A',
+                'Down': '\x1b[B',
+                'Right': '\x1b[C',
+                'Left': '\x1b[D',
+                'Space': ' '
+            };
+            
+            if (special[key]) {
+                 charToSend = special[key];
+            } else {
+                // Normal keys
+                charToSend = key;
+                if (state.caps) charToSend = charToSend.toUpperCase();
+                else if (state.shift) charToSend = charToSend.toUpperCase();
+                else charToSend = charToSend.toLowerCase();
+            }
+
+            // Apply Ctrl modifier (for a-z)
+            if (state.ctrl && charToSend.length === 1 && /[a-z]/i.test(charToSend)) {
+                const code = charToSend.toUpperCase().charCodeAt(0) - 64;
+                charToSend = String.fromCharCode(code);
+                // Auto-reset ctrl after use? Usually nicer for touch
+                state.ctrl = false; 
+                const ctrlBtn = container.querySelector('[data-key="Ctrl"]');
+                if (ctrlBtn) ctrlBtn.classList.remove('active');
+            }
+            
+            // Auto-reset shift
+            if (state.shift) {
+                 state.shift = false;
+                 const shiftBtn = container.querySelector('[data-key="Shift"]');
+                 if (shiftBtn) shiftBtn.classList.remove('active');
+            }
+
+            if (sendToSocket) sendToSocket(charToSend);
+            if (termModule) termModule.focus();
         });
     }
 

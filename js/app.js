@@ -125,3 +125,25 @@ window.addEventListener('load', () => {
         });
     }
 });
+
+// Turnstile Integration
+window.ksInitTurnstile = function() {
+    console.log('Turnstile API loaded');
+    if (!window.turnstile) return;
+    const widgetId = window.turnstile.render('#turnstile-widget', {        
+        callback: function(token) {
+            console.log('Turnstile Verified');
+            window.turnstileToken = token;
+            const banner = document.getElementById('auth-banner');
+            if (banner) {
+                banner.textContent = 'Verification Complete';
+                banner.className = 'auth-banner auth-banner--success';
+                banner.hidden = false;
+                setTimeout(() => banner.hidden = true, 3000);
+            }
+        },
+    });
+};
+
+// If Turnstile loaded before this script
+if (window.turnstile) window.ksInitTurnstile();
