@@ -1,17 +1,14 @@
 /**
- * test_all.js
+ * test_all.mjs
  * Comprehensive Security & Feature Test Suite for KeySocket Server
- * * Usage: 
- * 1. Start your server in a separate terminal: node server.js
- * 2. Run this script: node test_all.js
  */
 
-require('dotenv').config();
-const axios = require('axios');
-const WebSocket = require('ws');
-const assert = require('node:assert');
-const colors = require('colors');
-const net = require('node:net');
+import 'dotenv/config';
+import axios from 'axios';
+import WebSocket from 'ws';
+import assert from 'node:assert';
+import 'colors';
+import net from 'node:net';
 
 // Configuration
 const PORT = process.env.PORT || 3000;
@@ -43,9 +40,6 @@ async function runTest(name, testFn) {
 }
 
 // --- SECTION 1: WHITE-BOX LOGIC TESTING ---
-// We replicate the crucial security logic from server.js to test edge cases 
-// without needing a live Google Session.
-
 const intToIp = (int) => [
   (int >>> 24) & 0xFF, (int >>> 16) & 0xFF, (int >>> 8) & 0xFF, int & 0xFF
 ].join('.');
@@ -113,7 +107,6 @@ async function main() {
 
   await runTest('SSRF: Detect Octal/Hex Obfuscation', async () => {
     assert.strictEqual(ssrfLogic.isPrivateOrLocalIP('0177.0.0.1'), true); // Octal 127.0.0.1
-    // This previously failed, but should now pass with updated logic
     assert.strictEqual(ssrfLogic.isPrivateOrLocalIP('0x7f000001'), true); // Hex 127.0.0.1
     assert.strictEqual(ssrfLogic.isPrivateOrLocalIP('2130706433'), true); // Decimal 127.0.0.1
   });
@@ -142,7 +135,6 @@ async function main() {
 
   await runTest('Security Headers: X-RateLimit', async () => {
     const res = await axios.get(`${BASE_URL}/`);
-    // NOTE: This requires 'legacyHeaders: true' in server.js rateLimit config
     assert.ok(res.headers['x-ratelimit-limit'], 'Rate limit headers missing');
   });
 
@@ -168,7 +160,6 @@ async function main() {
 
   // WebSocket / SSH Security
   await runTest('WebSocket: Reject without Cookie/Auth', async () => {
-    // We attempt to connect to the SSH websocket without a session cookie
     const wsPromise = new Promise((resolve, reject) => {
       const wsUrl = BASE_URL.replace('http', 'ws') + '/ssh';
       const ws = new WebSocket(wsUrl);
@@ -179,7 +170,6 @@ async function main() {
       });
 
       ws.on('error', (err) => {
-        // ws library throws error on 401/403
         if (err.message.includes('401') || err.message.includes('403') || err.message.includes('Unexpected server response')) {
           resolve();
         } else {
@@ -201,15 +191,10 @@ async function main() {
   console.log(`\n[Phase 3] Stress / Rate Limit Testing`.yellow.bold);
 
   await runTest('Rate Limiting: Detect limit enforcement', async () => {
-    // This is aggressive, verify configured RATE_LIMIT in .env (default 120)
-    // We will fire requests until we hit a 429
     let hitLimit = false;
-    
-    // Create an axios instance that ignores status codes so 429 doesn't throw
     const client = axios.create({ validateStatus: () => true });
     
-    // We run this sequentially to be kind to the socket pool, but fast
-    for (let i = 0; i < 20; i++) { // Only try 20 bursts to see if headers update
+    for (let i = 0; i < 20; i++) {
        const res = await client.get(`${BASE_URL}/health`);
        const remaining = res.headers['x-ratelimit-remaining'];
        if (res.status === 429 || remaining === '0') {
@@ -218,8 +203,6 @@ async function main() {
        }
     }
     
-    // Note: We might not hit the limit if the test loop size < configured limit
-    // But we check if headers exist to prove the mechanism is active
     if (!hitLimit) {
       const res = await client.get(`${BASE_URL}/health`);
       assert.ok(res.headers['x-ratelimit-remaining'], 'Rate limit headers should be present');
