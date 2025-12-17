@@ -130,7 +130,8 @@ window.addEventListener('load', () => {
 window.ksInitTurnstile = function() {
     console.log('Turnstile API loaded');
     if (!window.turnstile) return;
-    const widgetId = window.turnstile.render('#turnstile-widget', {        
+    const widgetId = window.turnstile.render('#turnstile-widget', {
+        sitekey: window.Env ? window.Env.TURNSTILE_SITEKEY : '0x4AAAAAAA-generic-sitekey-placeholder',
         callback: function(token) {
             console.log('Turnstile Verified');
             window.turnstileToken = token;

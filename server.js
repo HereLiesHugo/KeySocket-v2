@@ -21,6 +21,7 @@ const { consumeVerifiedToken } = require('./lib/turnstile'); // Used for standal
 const app = express();
 const HOST = process.env.HOST || '0.0.0.0';
 const PORT = Number.parseInt(process.env.PORT || '3000', 10);
+const TURNSTILE_TOKEN_TTL_MS = Number.parseInt(process.env.TURNSTILE_TOKEN_TTL_MS || '30000', 10);
 
 // Logging
 logger.info('=== KeySocket Server Starting ===', {
@@ -191,10 +192,10 @@ app.post('/turnstile-verify', (req, res) => {
             if (!req.session) return res.status(500).json({ok:false});
             const serverToken = require('crypto').randomBytes(24).toString('hex');
             req.session.turnstileToken = serverToken;
-            req.session.turnstileTokenExpires = Date.now() + 30000;
+            req.session.turnstileTokenExpires = Date.now() + TURNSTILE_TOKEN_TTL_MS;
             req.session.turnstileVerifiedIP = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress;
             req.session.save(() => {
-                res.json({ ok: true, token: serverToken, ttl: 30000 });
+                res.json({ ok: true, token: serverToken, ttl: TURNSTILE_TOKEN_TTL_MS });
             });
         } else {
             res.status(400).json({ ok: false });
