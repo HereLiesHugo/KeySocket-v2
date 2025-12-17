@@ -1,4 +1,4 @@
-import { initTerminal, write, onData, focus, term } from './modules/terminal.js';
+import { initTerminal, write, onData, focus, applyTheme } from './modules/terminal.js';
 import { initUI, showBanner } from './modules/ui.js';
 import { saveConnection } from './modules/storage.js';
 
@@ -76,7 +76,7 @@ window.addEventListener('load', () => {
     initTerminal('terminal');
     
     // Pass a send function to UI for keyboard
-    initUI({ applyTheme: (t) => { if(term) term.setOption('theme', t); } }, (data) => send(data));
+    initUI({ applyTheme }, (data) => send(data));
     
     // Terminal input -> Socket
     onData((data) => {

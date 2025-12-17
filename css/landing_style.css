@@ -181,7 +181,7 @@ body {
 }
 
 .nav-menu .kofi-link:hover {
-  background: #ff5e5b;
+  background: #d64744;
   color: white;
   transform: translateY(-1px);
 }
@@ -947,20 +947,5 @@ body {
     padding: 1.5rem;
   }
 
-  .hero-title {
-    font-size: 2rem;
-  }
 
-  .hero-subtitle {
-    font-size: 1.1rem;
-  }
-
-  .section-title {
-    font-size: 2rem;
-  }
-
-  .feature-card,
-  .security-item {
-    padding: 1.5rem;
-  }
 }
