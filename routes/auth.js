@@ -7,7 +7,7 @@ const router = express.Router();
 router.get('/google',
   // If already authenticated, do not start a new OAuth flow
   (req, res, next) => {
-    if (req.isAuthenticated && req.isAuthenticated()) {
+    if (req.isAuthenticated?.()) {
       return res.redirect('/console?auth=already');
     }
     return next();
@@ -58,7 +58,7 @@ router.get('/logout', (req, res, next) => {
 
 // Simple endpoint to report current auth status to frontend
 router.get('/status', (req, res) => {
-  const isAuth = !!(req.isAuthenticated && req.isAuthenticated());
+  const isAuth = !!req.isAuthenticated?.();
   const user = isAuth && req.user ? {
     id: req.user.id,
     email: req.user.email,
