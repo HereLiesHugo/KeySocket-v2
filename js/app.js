@@ -1,21 +1,20 @@
-import { initTerminal, write, onData, focus, term } from './modules/terminal.js';
+import { initTerminal, write, onData, focus, applyTheme } from './modules/terminal.js';
 import { initUI, showBanner } from './modules/ui.js';
-import { getConnections, saveConnection } from './modules/storage.js';
+import { saveConnection } from './modules/storage.js';
 
 let socket = null;
 
 function send(data) {
     if (socket && socket.readyState === WebSocket.OPEN) {
-        if (typeof data === 'string') socket.send(data); // JSON
-        else socket.send(data); // Binary/Bytes
+        socket.send(data);
     }
 }
 
-function connect(host, port, username, auth, password, privateKey, passphrase, token) {
+function connect({ host, port, username, auth, password, privateKey, passphrase, token }) {
     if (socket) socket.close();
 
-    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const url = `${proto}//${window.location.host}/ssh`;
+    const proto = globalThis.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const url = `${proto}//${globalThis.location.host}/ssh`;
     
     // We can pass token in protocol or just rely on session.
     // If we pass it, we use subprotocol: ['ts=' + token]
@@ -47,16 +46,18 @@ function connect(host, port, username, auth, password, privateKey, passphrase, t
                 } else if (parsed.type === 'ssh-closed') {
                     showBanner('SSH Connection Closed', 'info');
                 }
-            } catch(e) { 
+            } catch(e) {
+                console.debug('Failed to parse socket message', e);
                 write(data); 
             }
         } else {
             // Binary data for terminal
             try {
-                const dec = new TextDecoder(); // naive text decoding, xterm handles bytes better usually if passed as string or Uint8Array
                 // xterm.write accepts string or Uint8Array
                 write(new Uint8Array(data)); 
-            } catch(e) {}
+            } catch(e) {
+                console.error('Terminal write error', e);
+            }
         }
     };
 
@@ -75,7 +76,7 @@ window.addEventListener('load', () => {
     initTerminal('terminal');
     
     // Pass a send function to UI for keyboard
-    initUI({ applyTheme: (t) => { if(term) term.setOption('theme', t); } }, (data) => send(data));
+    initUI({ applyTheme }, (data) => send(data));
     
     // Terminal input -> Socket
     onData((data) => {
@@ -84,37 +85,43 @@ window.addEventListener('load', () => {
 
     const form = document.getElementById('connect-form');
     if (form) {
-        form.addEventListener('submit', (e) => {
+        form.addEventListener('submit', async (e) => {
             e.preventDefault();
             const fd = new FormData(form);
             // Handle file input manually
             const keyFile = document.getElementById('keyfile').files[0];
             let pk = '';
+            
             if (keyFile) {
-                const r = new FileReader();
-                r.onload = () => {
-                    pk = r.result;
-                    doConnect(pk);
-                };
-                r.readAsText(keyFile);
-            } else {
-                doConnect();
+                try {
+                    pk = await keyFile.text();
+                } catch (err) {
+                    console.error('Failed to read key file', err);
+                    showBanner('Failed to read key file', 'error');
+                    return;
+                }
             }
+            
+            doConnect(pk);
 
             function doConnect(pkText) {
                 // Get Turnstile token if needed
                 // For now, assume session has it or we grab it from global turnstile widget
                 // Simplified:
-                const token = window.turnstileToken || ''; 
+                const token = globalThis.turnstileToken || ''; 
                 // Note: The previous app had complex turnstile logic. 
                 // I'm simplifying for the refactor to get base working.
                 
-                connect(
-                    fd.get('host'), fd.get('port'), fd.get('username'),
-                    fd.get('auth'), fd.get('password'),
-                    pkText || '', fd.get('passphrase'),
+                connect({
+                    host: fd.get('host'), 
+                    port: fd.get('port'), 
+                    username: fd.get('username'),
+                    auth: fd.get('auth'), 
+                    password: fd.get('password'),
+                    privateKey: pkText || '', 
+                    passphrase: fd.get('passphrase'),
                     token
-                );
+                });
                 
                 // Save?
                 saveConnection({
@@ -127,14 +134,14 @@ window.addEventListener('load', () => {
 });
 
 // Turnstile Integration
-window.ksInitTurnstile = function() {
+globalThis.ksInitTurnstile = function() {
     console.log('Turnstile API loaded');
-    if (!window.turnstile) return;
-    const widgetId = window.turnstile.render('#turnstile-widget', {
-        sitekey: window.Env ? window.Env.TURNSTILE_SITEKEY : '0x4AAAAAAA-generic-sitekey-placeholder',
+    if (!globalThis.turnstile) return;
+    globalThis.turnstile.render('#turnstile-widget', {
+        sitekey: globalThis.Env ? globalThis.Env.TURNSTILE_SITEKEY : '0x4AAAAAAA-generic-sitekey-placeholder',
         callback: function(token) {
             console.log('Turnstile Verified');
-            window.turnstileToken = token;
+            globalThis.turnstileToken = token;
             const banner = document.getElementById('auth-banner');
             if (banner) {
                 banner.textContent = 'Verification Complete';
@@ -147,4 +154,4 @@ window.ksInitTurnstile = function() {
 };
 
 // If Turnstile loaded before this script
-if (window.turnstile) window.ksInitTurnstile();
+if (globalThis.turnstile) globalThis.ksInitTurnstile();

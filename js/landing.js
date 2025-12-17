@@ -55,7 +55,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             if (target) {
                 // Close mobile menu if open
-                if (mobileMenu && mobileMenu.classList.contains('active')) {
+                if (mobileMenu?.classList.contains('active')) {
                     mobileMenu.setAttribute('aria-expanded', 'false');
                     mobileMenu.classList.remove('active');
                     navMenu.classList.remove('active');
@@ -91,7 +91,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let ticking = false;
     window.addEventListener('scroll', function() {
         if (!ticking) {
-            window.requestAnimationFrame(function() {
+            globalThis.requestAnimationFrame(function() {
                 updateNavbarStyle();
                 ticking = false;
             });
@@ -166,7 +166,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.addEventListener('keydown', function(e) {
         // Escape to close mobile menu
         if (e.key === 'Escape') {
-            if (mobileMenu && mobileMenu.classList.contains('active')) {
+            if (mobileMenu?.classList.contains('active')) {
                 mobileMenu.click(); // Trigger toggle
             }
         }

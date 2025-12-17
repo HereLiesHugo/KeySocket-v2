@@ -5,7 +5,10 @@ const MAX = 20;
 export function getConnections() {
     try {
         return JSON.parse(localStorage.getItem(KEY) || '[]');
-    } catch (e) { return []; }
+    } catch (e) {
+        console.error('Failed to parse connections', e);
+        return [];
+    }
 }
 
 export function saveConnection(conn) {

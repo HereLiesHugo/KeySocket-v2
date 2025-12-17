@@ -1,21 +1,20 @@
 require('dotenv').config();
-const fs = require('fs');
-const path = require('path');
+const fs = require('node:fs');
+const path = require('node:path');
 const express = require('express');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const morgan = require('morgan');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
-const https = require('https');
-const http = require('http');
+const https = require('node:https');
+const http = require('node:http');
 
 // Modules
 const logger = require('./lib/logger');
 const { sessionMiddleware, sessionStore } = require('./lib/session');
 const authRoutes = require('./routes/auth');
 const { initializeWebSocketServer } = require('./lib/websocket');
-const { consumeVerifiedToken } = require('./lib/turnstile'); // Used for standalone valid endpoint
 
 // App Setup
 const app = express();
@@ -31,7 +30,7 @@ logger.info('=== KeySocket Server Starting ===', {
 });
 
 // Proxy Settings
-const BEHIND_PROXY = typeof process.env.BEHIND_PROXY !== 'undefined' ? (process.env.BEHIND_PROXY === 'true') : true;
+const BEHIND_PROXY = process.env.BEHIND_PROXY === undefined ? true : (process.env.BEHIND_PROXY === 'true');
 app.set('trust proxy', BEHIND_PROXY ? (process.env.TRUST_PROXY || 1) : false);
 
 // Passport Config
@@ -150,8 +149,8 @@ const servePage = (file) => (req, res) => {
     const p = path.join(__dirname, file);
     if (!fs.existsSync(p)) return res.status(404).send('Not Found');
     let html = fs.readFileSync(p, 'utf8');
-    html = html.replaceAll(/__ASSET_VERSION__/g, ASSET_VERSION);
-    html = html.replaceAll(/__TURNSTILE_SITEKEY__/g, process.env.TURNSTILE_SITEKEY || '');
+    html = html.replaceAll('__ASSET_VERSION__', ASSET_VERSION);
+    html = html.replaceAll('__TURNSTILE_SITEKEY__', process.env.TURNSTILE_SITEKEY || '');
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(html);
   } catch (e) {
@@ -190,7 +189,7 @@ app.post('/turnstile-verify', (req, res) => {
         const parsed = JSON.parse(data);
         if (parsed.success) {
             if (!req.session) return res.status(500).json({ok:false});
-            const serverToken = require('crypto').randomBytes(24).toString('hex');
+            const serverToken = require('node:crypto').randomBytes(24).toString('hex');
             req.session.turnstileToken = serverToken;
             req.session.turnstileTokenExpires = Date.now() + TURNSTILE_TOKEN_TTL_MS;
             req.session.turnstileVerifiedIP = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress;
@@ -200,7 +199,10 @@ app.post('/turnstile-verify', (req, res) => {
         } else {
             res.status(400).json({ ok: false });
         }
-      } catch(e) { res.status(500).json({ ok: false }); }
+      } catch(e) {
+        logger.error('[Turnstile] JSON parse error', { error: e.message });
+        res.status(500).json({ ok: false }); 
+      }
     });
   });
   r2.write(postData);

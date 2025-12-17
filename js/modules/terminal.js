@@ -1,11 +1,11 @@
 /* Terminal Module */
-export let term = null;
-export let fit = null;
+let term = null;
+let fit = null;
 
 export function initTerminal(containerId) {
-    const Terminal = window.Terminal;
-    const FitAddon = window.FitAddon && (window.FitAddon.FitAddon || window.FitAddon);
-    const WebglAddon = window.WebglAddon && (window.WebglAddon.WebglAddon || window.WebglAddon);
+    const Terminal = globalThis.Terminal;
+    const FitAddon = globalThis.FitAddon && (globalThis.FitAddon.FitAddon || globalThis.FitAddon);
+    const WebglAddon = globalThis.WebglAddon && (globalThis.WebglAddon.WebglAddon || globalThis.WebglAddon);
 
     if (!Terminal) {
         console.error('xterm not found');
@@ -22,20 +22,41 @@ export function initTerminal(containerId) {
     });
 
     if (FitAddon) {
-        try { fit = new FitAddon(); term.loadAddon(fit); } catch (e) {}
+        try { 
+            fit = new FitAddon(); 
+            term.loadAddon(fit); 
+        } catch (e) {
+            console.warn('Failed to load FitAddon', e);
+        }
     }
 
     if (WebglAddon) {
-        try { term.loadAddon(new WebglAddon()); } catch (e) {}
+        try { 
+            term.loadAddon(new WebglAddon()); 
+        } catch (e) {
+            console.warn('Failed to load WebglAddon', e);
+        }
     }
 
     const el = document.getElementById(containerId);
     if (el) term.open(el);
-    if (fit) try { fit.fit(); } catch(e){}
+    if (fit) {
+        try { 
+            fit.fit(); 
+        } catch(e) {
+            console.warn('Fit error', e);
+        }
+    }
 
     // Global resize observer could go here or in app.js
-    window.addEventListener('resize', () => {
-        if (fit) try { fit.fit(); } catch(e){}
+    globalThis.addEventListener('resize', () => {
+        if (fit) {
+            try { 
+                fit.fit(); 
+            } catch(e) {
+                console.warn('Resize fit error', e);
+            }
+        }
     });
 }
 

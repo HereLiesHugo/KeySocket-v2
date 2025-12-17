@@ -73,14 +73,20 @@ const ssrfLogic = {
           if (Number.isNaN(intVal)) return true;
           ip = intToIp(intVal);
         }
-      } catch (e) { return true; }
+      } catch (e) {
+        console.warn('  (Dotted hex parse hint)', e.message);
+        return true; 
+      }
     }
     
     // 2. Handle Octal (leading 0) - e.g., 0177.0.0.1
     else if (ip.startsWith('0') && ip.includes('.') && /^[0-7.]+$/.test(ip)) {
         try {
           ip = ip.split('.').map(part => Number.parseInt(part, 8)).join('.');
-        } catch (e) { return true; }
+        } catch (e) {
+          console.warn('  (Octal parse hint)', e.message);
+          return true; 
+        }
     }
 
     // 3. Handle Decimal (Flat Integer) e.g. 2130706433
@@ -89,7 +95,10 @@ const ssrfLogic = {
         const decimal = Number.parseInt(ip, 10);
         if (decimal < 0 || decimal > 0xFFFFFFFF) return true; // Invalid range
         ip = intToIp(decimal);
-      } catch (e) { return true; }
+      } catch (e) {
+        console.warn('  (Decimal parse hint)', e.message);
+        return true; 
+      }
     }
 
     // Basic localhost variations

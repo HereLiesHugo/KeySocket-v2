@@ -54,6 +54,38 @@ export function initUI(termModule, sendToSocket) {
         html += '</div>';
         container.innerHTML = html;
 
+        // Helper to handle modifier keys return true if handled
+        const handleModifier = (key, btn) => {
+            if (key === 'Shift') {
+                state.shift = !state.shift;
+                btn.classList.toggle('active', state.shift);
+                return true;
+            }
+            if (key === 'Ctrl') {
+                state.ctrl = !state.ctrl;
+                btn.classList.toggle('active', state.ctrl);
+                return true;
+            }
+            if (key === 'Caps') {
+                state.caps = !state.caps;
+                btn.classList.toggle('active', state.caps);
+                return true;
+            }
+            return false;
+        };
+
+        const getChar = (key) => {
+            const special = {
+                'Esc': '\x1b', 'Tab': '\t', 'Bksp': '\x7f', 'Enter': '\r',
+                'Up': '\x1b[A', 'Down': '\x1b[B', 'Right': '\x1b[C', 'Left': '\x1b[D', 'Space': ' '
+            };
+            if (special[key]) return special[key];
+            
+            // Normal keys logic
+            if (state.caps || state.shift) return key.toUpperCase();
+            return key.toLowerCase();
+        };
+
         // Event Handling
         container.addEventListener('click', (e) => {
             const btn = e.target.closest('.vk-key');
@@ -62,53 +94,14 @@ export function initUI(termModule, sendToSocket) {
             
             const key = btn.dataset.key;
             
-            // Modifier Toggles
-            if (key === 'Shift') {
-                state.shift = !state.shift;
-                btn.classList.toggle('active', state.shift);
-                return;
-            }
-            if (key === 'Ctrl') {
-                state.ctrl = !state.ctrl;
-                btn.classList.toggle('active', state.ctrl);
-                return;
-            }
-            if (key === 'Caps') {
-                state.caps = !state.caps;
-                btn.classList.toggle('active', state.caps);
-                return;
-            }
+            if (handleModifier(key, btn)) return;
 
-            // Character sending
-            let charToSend = '';
-            
-            // Special Keys
-            const special = {
-                'Esc': '\x1b',
-                'Tab': '\t',
-                'Bksp': '\x7f',
-                'Enter': '\r',
-                'Up': '\x1b[A',
-                'Down': '\x1b[B',
-                'Right': '\x1b[C',
-                'Left': '\x1b[D',
-                'Space': ' '
-            };
-            
-            if (special[key]) {
-                 charToSend = special[key];
-            } else {
-                // Normal keys
-                charToSend = key;
-                if (state.caps) charToSend = charToSend.toUpperCase();
-                else if (state.shift) charToSend = charToSend.toUpperCase();
-                else charToSend = charToSend.toLowerCase();
-            }
+            let charToSend = getChar(key);
 
             // Apply Ctrl modifier (for a-z)
             if (state.ctrl && charToSend.length === 1 && /[a-z]/i.test(charToSend)) {
-                const code = charToSend.toUpperCase().charCodeAt(0) - 64;
-                charToSend = String.fromCharCode(code);
+                const code = charToSend.toUpperCase().codePointAt(0) - 64;
+                charToSend = String.fromCodePoint(code);
                 // Auto-reset ctrl after use? Usually nicer for touch
                 state.ctrl = false; 
                 const ctrlBtn = container.querySelector('[data-key="Ctrl"]');
@@ -131,8 +124,8 @@ export function initUI(termModule, sendToSocket) {
     const fsBtn = document.getElementById('fullscreen-btn');
     if (fsBtn) {
         fsBtn.addEventListener('click', () => {
-             if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(()=>{});
-             else document.exitFullscreen();
+             if (document.fullscreenElement) document.exitFullscreen();
+             else document.documentElement.requestFullscreen().catch(()=>{});
         });
     }
 }
