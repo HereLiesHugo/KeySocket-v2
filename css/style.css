@@ -90,17 +90,14 @@ button {
 /* App entrance */
 .app {
   animation: slideUp var(--transition-fade) ease;
-}
-
-/* ============================================================================
-   2. LAYOUT & TOPBAR
-   ============================================================================ */
-.app {
   max-width: 1100px;
   margin: var(--spacing-xl) auto;
   padding: var(--spacing-lg);
 }
 
+/* ============================================================================
+   2. LAYOUT & TOPBAR
+   ============================================================================ */
 .topbar {
   display: flex;
   align-items: center;
@@ -552,8 +549,8 @@ main {
 }
 
 .connection-actions .edit-btn {
-  background: #0ea5e9;
-  color: #e0f2fe;
+  background: #0369a1; /* Darker blue for better contrast */
+  color: #ffffff;
 }
 
 .connection-actions .delete-btn {
@@ -562,9 +559,9 @@ main {
 }
 
 .connection-actions .edit-btn:hover {
-  background: #0284c7;
+  background: #075985; /* Darker blue for hover */
   transform: translateY(-1px);
-  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.3);
+  box-shadow: 0 2px 6px rgba(7, 89, 133, 0.3);
 }
 
 .connection-actions .delete-btn:hover {
@@ -622,9 +619,9 @@ main {
 }
 
 .auth-banner--success {
-  background: #16a34a;
-  color: #ecfdf3;
-  box-shadow: 0 4px 12px rgba(22, 163, 74, 0.2);
+  background: #15803d; /* Darker green for better contrast */
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(21, 128, 61, 0.2);
 }
 
 .auth-banner--error {
@@ -634,9 +631,9 @@ main {
 }
 
 .auth-banner--info {
-  background: #0ea5e9;
-  color: #e0f2fe;
-  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.2);
+  background: #0369a1; /* Darker blue for better contrast */
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(3, 105, 161, 0.2);
 }
 
 .auth-banner:hover {
