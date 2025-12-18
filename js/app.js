@@ -137,8 +137,20 @@ window.addEventListener('load', () => {
 globalThis.ksInitTurnstile = function() {
     console.log('Turnstile API loaded');
     if (!globalThis.turnstile) return;
+    const sitekey = globalThis.Env?.TURNSTILE_SITEKEY;
+    if (!sitekey || sitekey === '__TURNSTILE_SITEKEY__') {
+        console.error('Turnstile Sitekey not provided or replacement failed');
+        const banner = document.getElementById('auth-banner');
+        if (banner) {
+            banner.textContent = 'Configuration Error: Missing Sitekey';
+            banner.className = 'auth-banner auth-banner--error';
+            banner.hidden = false;
+        }
+        return;
+    }
+    
     globalThis.turnstile.render('#turnstile-widget', {
-        sitekey: globalThis.Env ? globalThis.Env.TURNSTILE_SITEKEY : '0x4AAAAAAA-generic-sitekey-placeholder',
+        sitekey: sitekey,
         callback: function(token) {
             console.log('Turnstile Verified');
             globalThis.turnstileToken = token;

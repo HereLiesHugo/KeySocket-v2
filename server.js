@@ -29,6 +29,14 @@ logger.info('=== KeySocket Server Starting ===', {
   env: process.env.NODE_ENV || 'development'
 });
 
+// Credentials Check
+if (!process.env.TURNSTILE_SITEKEY) {
+  logger.warn('[Turnstile] TURNSTILE_SITEKEY is missing from .env');
+}
+if (!process.env.TURNSTILE_SECRET) {
+  logger.warn('[Turnstile] TURNSTILE_SECRET is missing from .env');
+}
+
 // Proxy Settings
 const BEHIND_PROXY = process.env.BEHIND_PROXY === undefined ? true : (process.env.BEHIND_PROXY === 'true');
 app.set('trust proxy', BEHIND_PROXY ? (process.env.TRUST_PROXY || 1) : false);
@@ -127,14 +135,24 @@ app.use(rateLimit({
 // Routes
 app.use('/auth', authRoutes);
 
-// Static Files
+// Static Files (Hardened)
 const ASSET_VERSION = process.env.ASSET_VERSION || String(Date.now());
 const staticOpts = { maxAge: '1d', etag: true };
-app.use('/lib', express.static('lib', { ...staticOpts, maxAge: '1y', setHeaders: (res, p) => {
+
+// Specific library routes 
+app.use('/lib', express.static(path.join(__dirname, 'lib'), { ...staticOpts, maxAge: '1y', setHeaders: (res, p) => {
   if (p.endsWith('.js') || p.endsWith('.css')) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
 }}));
-app.use('/js', express.static('js', staticOpts));
-app.use(express.static(__dirname, { index: false }));
+
+// Specific application routes
+app.use('/js', express.static(path.join(__dirname, 'js'), staticOpts));
+app.use('/css', express.static(path.join(__dirname, 'css'), staticOpts));
+app.use('/img', express.static(path.join(__dirname, 'img'), staticOpts));
+
+// Root level static assets (Explicit)
+app.get('/favicon.ico', (req, res) => res.sendFile(path.join(__dirname, 'favicon.ico')));
+app.get('/robots.txt', (req, res) => res.sendFile(path.join(__dirname, 'robots.txt')));
+app.get('/sitemap.xml', (req, res) => res.sendFile(path.join(__dirname, 'sitemap.xml')));
 
 // Xterm libs
 const nm = path.join(__dirname, 'node_modules');
@@ -163,6 +181,12 @@ app.get('/index.html', servePage('index.html'));
 app.get('/console', servePage('console.html'));
 app.get('/console.html', servePage('console.html'));
 app.get('/health', (req, res) => res.json({ ok: true, env: process.env.NODE_ENV || 'development' }));
+
+// Final catch-all for static files in root (SECURE: only if no other route matched)
+// We avoid this if possible for better security, but keep it at the BOTTOM for unexpected assets
+// Actually, it's safer to NOT have a catch-all for the entire root directory.
+// Let's comment this out and rely on explicit routes above.
+// app.use(express.static(__dirname, { index: false }));
 
 // Turnstile Verification Endpoint
 app.post('/turnstile-verify', (req, res) => {
