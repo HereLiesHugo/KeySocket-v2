@@ -2,32 +2,7 @@
 let term = null;
 let fit = null;
 
-// Handle window resize globally
-globalThis.addEventListener('resize', () => {
-    if (fit) {
-        try { 
-            fit.fit(); 
-        } catch(e) {
-            console.warn('Resize fit error', e);
-        }
-    }
-});
-
-export function disposeTerminal() {
-    if (term) {
-        term.dispose();
-        term = null;
-    }
-    if (fit) {
-        fit = null;
-    }
-}
-
 export function initTerminal(containerId) {
-    if (term) {
-        disposeTerminal();
-    }
-
     const Terminal = globalThis.Terminal;
     const FitAddon = globalThis.FitAddon && (globalThis.FitAddon.FitAddon || globalThis.FitAddon);
     const WebglAddon = globalThis.WebglAddon && (globalThis.WebglAddon.WebglAddon || globalThis.WebglAddon);
@@ -72,6 +47,17 @@ export function initTerminal(containerId) {
             console.warn('Fit error', e);
         }
     }
+
+    // Global resize observer could go here or in app.js
+    globalThis.addEventListener('resize', () => {
+        if (fit) {
+            try { 
+                fit.fit(); 
+            } catch(e) {
+                console.warn('Resize fit error', e);
+            }
+        }
+    });
 }
 
 export function write(data) {
@@ -79,8 +65,7 @@ export function write(data) {
 }
 
 export function onData(callback) {
-    if (term) return term.onData(callback);
-    return null;
+    if (term) term.onData(callback);
 }
 
 export function focus() {

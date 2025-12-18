@@ -10,24 +10,8 @@ function send(data) {
     }
 }
 
-// Terminal management
-let terminalDataHandler = null;
-
-function setupTerminal() {
-    initTerminal('terminal');
-    if (terminalDataHandler) {
-        terminalDataHandler.dispose();
-    }
-    terminalDataHandler = onData((data) => {
-        send(new TextEncoder().encode(data));
-    });
-}
-
 function connect({ host, port, username, auth, password, privateKey, passphrase, token }) {
     if (socket) socket.close();
-    
-    // Ensure fresh terminal state on connect
-    setupTerminal();
 
     const proto = globalThis.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const url = `${proto}//${globalThis.location.host}/ssh`;
@@ -89,11 +73,15 @@ function connect({ host, port, username, auth, password, privateKey, passphrase,
 
 // Window Load
 window.addEventListener('load', () => {
-    // Initial setup
-    setupTerminal();
+    initTerminal('terminal');
     
     // Pass a send function to UI for keyboard
     initUI({ applyTheme }, (data) => send(data));
+    
+    // Terminal input -> Socket
+    onData((data) => {
+        send(new TextEncoder().encode(data));
+    });
 
     const form = document.getElementById('connect-form');
     if (form) {

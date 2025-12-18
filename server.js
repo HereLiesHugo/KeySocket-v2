@@ -60,20 +60,12 @@ app.use(helmet({
 // CSP
 app.use((req, res, next) => {
   if (!res.getHeader('Content-Security-Policy')) {
-    // Generate a nonce for this request
-    const nonce = require('crypto').randomBytes(16).toString('base64');
-    res.locals.nonce = nonce;
-    
     res.setHeader("Content-Security-Policy", 
       "default-src 'self'; " +
       "script-src 'self' " +
         "'sha256-GAEWvptc7gBRWsWwhJ4hc8G4xPAH6dlDCDRyN3QrxQg=' " +
         "'sha256-XE/rk1B1hi3MM4L/gFLf0ld8k4UBfe30haqIxm4Om+0=' " +
         "'sha256-sSE0eU9JEHCECAOMSXkHIyD43AmAVBPvw56cdRedOyI=' " +
-        "'sha256-00STVCvw2uQT11WXoktmNw2vyzx1RQodknQXuTRrVM0=' " +
-        "'sha256-RuZFCHf18vIYm8YWPiG1l0/07jErPH7JFkqP24WAf1g=' " +
-        `'nonce-${nonce}' ` +
-        "'unsafe-eval' " +
         "https://challenges.cloudflare.com " +
         "https://cdn.jsdelivr.net " +
         "https://static.cloudflareinsights.com; " +
@@ -138,30 +130,18 @@ app.use('/auth', authRoutes);
 // Static Files
 const ASSET_VERSION = process.env.ASSET_VERSION || String(Date.now());
 const staticOpts = { maxAge: '1d', etag: true };
-
-// Environment Variables for Frontend (Moved above static to ensure processing)
-app.get('/js/env.js', (req, res) => {
-  try {
-    const p = path.join(__dirname, 'js', 'env.js');
-    if (!fs.existsSync(p)) return res.status(404).send('Not Found');
-    let content = fs.readFileSync(p, 'utf8');
-    content = content.replaceAll('__TURNSTILE_SITEKEY__', process.env.TURNSTILE_SITEKEY || '');
-    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-    res.send(content);
-  } catch (e) {
-    logger.error('Error serving env.js', { error: e.message });
-    res.status(500).send('Server Error');
-  }
-});
-
 app.use('/lib', express.static('lib', { ...staticOpts, maxAge: '1y', setHeaders: (res, p) => {
   if (p.endsWith('.js') || p.endsWith('.css')) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
 }}));
 app.use('/js', express.static('js', staticOpts));
-
 app.use(express.static(__dirname, { index: false }));
 
-// Xterm libs - served from lib directory by static middleware above
+// Xterm libs
+const nm = path.join(__dirname, 'node_modules');
+app.get('/lib/xterm.css', (req, res) => res.sendFile(path.join(nm, '@xterm/xterm/css/xterm.css')));
+app.get('/lib/xterm.js', (req, res) => res.sendFile(path.join(nm, '@xterm/xterm/lib/xterm.js')));
+app.get('/lib/xterm-addon-fit.js', (req, res) => res.sendFile(path.join(nm, '@xterm/addon-fit/lib/addon-fit.js')));
+app.get('/lib/xterm-addon-webgl.js', (req, res) => res.sendFile(path.join(nm, '@xterm/addon-webgl/lib/addon-webgl.js')));
 
 // Pages
 const servePage = (file) => (req, res) => {
