@@ -140,7 +140,7 @@ body {
    SECURITY COMMITMENT
    ============================================================================ */
 .security-commitment {
-    background: linear-gradient(135deg, var(--success-color), #059669);
+    background: linear-gradient(135deg, #15803d, #166534); /* Darker greens for better contrast */
     color: white;
     padding: 20px;
     border-radius: 8px;
