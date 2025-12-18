@@ -66,6 +66,8 @@ app.use((req, res, next) => {
         "'sha256-GAEWvptc7gBRWsWwhJ4hc8G4xPAH6dlDCDRyN3QrxQg=' " +
         "'sha256-XE/rk1B1hi3MM4L/gFLf0ld8k4UBfe30haqIxm4Om+0=' " +
         "'sha256-sSE0eU9JEHCECAOMSXkHIyD43AmAVBPvw56cdRedOyI=' " +
+        "'sha256-00STVCvw2uQT11WXoktmNw2vyzx1RQodknQXuTRrVM0=' " +
+        "'sha256-RuZFCHf18vIYm8YWPiG1l0/07jErPH7JFkqP24WAf1g=' " +
         "https://challenges.cloudflare.com " +
         "https://cdn.jsdelivr.net " +
         "https://static.cloudflareinsights.com; " +
@@ -130,12 +132,8 @@ app.use('/auth', authRoutes);
 // Static Files
 const ASSET_VERSION = process.env.ASSET_VERSION || String(Date.now());
 const staticOpts = { maxAge: '1d', etag: true };
-app.use('/lib', express.static('lib', { ...staticOpts, maxAge: '1y', setHeaders: (res, p) => {
-  if (p.endsWith('.js') || p.endsWith('.css')) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-}}));
-app.use('/js', express.static('js', staticOpts));
 
-// Environment Variables for Frontend
+// Environment Variables for Frontend (Moved above static to ensure processing)
 app.get('/js/env.js', (req, res) => {
   try {
     const p = path.join(__dirname, 'js', 'env.js');
@@ -149,6 +147,11 @@ app.get('/js/env.js', (req, res) => {
     res.status(500).send('Server Error');
   }
 });
+
+app.use('/lib', express.static('lib', { ...staticOpts, maxAge: '1y', setHeaders: (res, p) => {
+  if (p.endsWith('.js') || p.endsWith('.css')) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+}}));
+app.use('/js', express.static('js', staticOpts));
 
 app.use(express.static(__dirname, { index: false }));
 
