@@ -60,6 +60,10 @@ app.use(helmet({
 // CSP
 app.use((req, res, next) => {
   if (!res.getHeader('Content-Security-Policy')) {
+    // Generate a nonce for this request
+    const nonce = require('crypto').randomBytes(16).toString('base64');
+    res.locals.nonce = nonce;
+    
     res.setHeader("Content-Security-Policy", 
       "default-src 'self'; " +
       "script-src 'self' " +
@@ -68,6 +72,8 @@ app.use((req, res, next) => {
         "'sha256-sSE0eU9JEHCECAOMSXkHIyD43AmAVBPvw56cdRedOyI=' " +
         "'sha256-00STVCvw2uQT11WXoktmNw2vyzx1RQodknQXuTRrVM0=' " +
         "'sha256-RuZFCHf18vIYm8YWPiG1l0/07jErPH7JFkqP24WAf1g=' " +
+        `'nonce-${nonce}' ` +
+        "'unsafe-eval' " +
         "https://challenges.cloudflare.com " +
         "https://cdn.jsdelivr.net " +
         "https://static.cloudflareinsights.com; " +
@@ -155,12 +161,7 @@ app.use('/js', express.static('js', staticOpts));
 
 app.use(express.static(__dirname, { index: false }));
 
-// Xterm libs
-const nm = path.join(__dirname, 'node_modules');
-app.get('/lib/xterm.css', (req, res) => res.sendFile(path.join(nm, '@xterm/xterm/css/xterm.css')));
-app.get('/lib/xterm.js', (req, res) => res.sendFile(path.join(nm, '@xterm/xterm/lib/xterm.js')));
-app.get('/lib/xterm-addon-fit.js', (req, res) => res.sendFile(path.join(nm, '@xterm/addon-fit/lib/addon-fit.js')));
-app.get('/lib/xterm-addon-webgl.js', (req, res) => res.sendFile(path.join(nm, '@xterm/addon-webgl/lib/addon-webgl.js')));
+// Xterm libs - served from lib directory by static middleware above
 
 // Pages
 const servePage = (file) => (req, res) => {

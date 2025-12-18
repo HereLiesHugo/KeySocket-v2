@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>XTerm Test</title>
+    <link rel="stylesheet" href="/lib/xterm.css">
+</head>
+<body>
+    <h1>XTerm.js Test</h1>
+    <div id="terminal"></div>
+    
+    <script src="/lib/xterm.js"></script>
+    <script src="/lib/xterm-addon-fit.js"></script>
+    <script src="/lib/xterm-addon-webgl.js"></script>
+    <script>
+        try {
+            const term = new Terminal();
+            const fit = new FitAddon.FitAddon();
+            
+            term.loadAddon(fit);
+            term.open(document.getElementById('terminal'));
+            fit.fit();
+            
+            term.write('Hello from KeySocket Terminal!\r\n');
+            term.write('XTerm.js loaded successfully!\r\n');
+            
+            console.log('XTerm test passed');
+        } catch (error) {
+            console.error('XTerm test failed:', error);
+            document.body.innerHTML += '<p style="color: red;">Error: ' + error.message + '</p>';
+        }
+    </script>
+</body>
+</html>
