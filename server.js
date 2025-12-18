@@ -134,6 +134,22 @@ app.use('/lib', express.static('lib', { ...staticOpts, maxAge: '1y', setHeaders:
   if (p.endsWith('.js') || p.endsWith('.css')) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
 }}));
 app.use('/js', express.static('js', staticOpts));
+
+// Environment Variables for Frontend
+app.get('/js/env.js', (req, res) => {
+  try {
+    const p = path.join(__dirname, 'js', 'env.js');
+    if (!fs.existsSync(p)) return res.status(404).send('Not Found');
+    let content = fs.readFileSync(p, 'utf8');
+    content = content.replaceAll('__TURNSTILE_SITEKEY__', process.env.TURNSTILE_SITEKEY || '');
+    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+    res.send(content);
+  } catch (e) {
+    logger.error('Error serving env.js', { error: e.message });
+    res.status(500).send('Server Error');
+  }
+});
+
 app.use(express.static(__dirname, { index: false }));
 
 // Xterm libs
