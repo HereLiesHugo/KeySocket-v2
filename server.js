@@ -70,7 +70,7 @@ app.use((req, res, next) => {
   if (!res.getHeader('Content-Security-Policy')) {
     res.setHeader("Content-Security-Policy", 
       "default-src 'self'; " +
-      "script-src 'self' " +
+      "script-src 'self' 'unsafe-inline' " +
         "'sha256-GAEWvptc7gBRWsWwhJ4hc8G4xPAH6dlDCDRyN3QrxQg=' " +
         "'sha256-XE/rk1B1hi3MM4L/gFLf0ld8k4UBfe30haqIxm4Om+0=' " +
         "'sha256-sSE0eU9JEHCECAOMSXkHIyD43AmAVBPvw56cdRedOyI=' " +
