@@ -60,17 +60,12 @@ def log_warn(msg):
 def log_error(msg):
     log(msg, bcolors.FAIL)
 
-# Securely get the branch name without shell=True
-# capture_output=True allows us to read stdout/stderr
-branch_proc = run(["git", "branch", "--show-current"], capture_output=True, text=True, check=True)
-branch = branch_proc.stdout.strip()
+branch = run(["git", "branch", "--show-current"], check=True, capture_output=True, text=True).stdout.strip()
 
 try:
     # 1. GIT OPERATIONS
     log_info(f'You are currently on branch "{branch}"')
     log_action(f'Fetching/Pulling latest changes from {branch}...')
-    
-    # check=True replaces check_call. It raises CalledProcessError on non-zero exit code.
     run(['git', 'fetch', '--all'], check=True)
     success("Fetched latest changes.")
     
@@ -85,8 +80,8 @@ try:
     sleep(1)
 
     log_action('Auditing dependencies...')
-    # check=False (default) mimics 'call' behavior (continues on error)
-    run(['npm', 'audit'], check=False)
+    # Using 'call' allows the script to continue even if vulnerabilities are found
+    run(['npm', 'audit'])
     info("Audit check complete.")
     sleep(1)
     
@@ -106,7 +101,6 @@ try:
     log_action(f'Verifying backend is running on port {PORT}...')
     # -f: Fails on HTTP errors (404/500)
     # --retry 3: Tries 3 times before giving up
-    # Note: PORT is an integer, so we format it into the URL string securely
     run(['curl', '-f', '-I', '--retry', '3', '--retry-delay', '1', f'http://localhost:{PORT}'], check=True)
     success("Backend health check passed.")
     sleep(1)
@@ -125,11 +119,11 @@ try:
 
     # 6. STATUS REPORTS
     log_info('Checking nginx status...')
-    run(['sudo', 'systemctl', 'status', 'nginx', '--no-pager'], check=False)
+    run(['sudo', 'systemctl', 'status', 'nginx', '--no-pager'])
     sleep(1)
 
     log_info(f'Checking pm2 status for {APP_NAME}...')
-    run(['pm2', 'status', APP_NAME], check=False)
+    run(['pm2', 'status', APP_NAME])
     sleep(1)
 
     # 7. DONE
@@ -138,9 +132,8 @@ try:
     success('Deployment script finished successfully.')
     sleep(1)
 
-except CalledProcessError as e:
+except CalledProcessError:
     error("\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
     error("ERROR: One of the commands failed. Deployment stopped.")
-    error(f"Command failed: {e.cmd}")
     error("Check the logs above to see which step failed.")
     error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")

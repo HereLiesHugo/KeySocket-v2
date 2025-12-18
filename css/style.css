@@ -35,19 +35,7 @@
 }
 
 /* ============================================================================
-   TABLE OF CONTENTS
-   ----------------------------------------------------------------------------
-   1. GLOBAL & BASE STYLES
-   2. LAYOUT & TOPBAR
-   3. CONNECTION PANEL
-   4. TERMINAL AREA
-   5. APP MANAGEMENT & MODALS
-   6. UTILITIES & ANIMATIONS
-   7. RESPONSIVE DESIGN
-   ============================================================================ */
-
-/* ============================================================================
-   1. GLOBAL & BASE STYLES
+   GLOBAL & BASE STYLES
    ============================================================================ */
 * {
   box-sizing: border-box;
@@ -90,14 +78,17 @@ button {
 /* App entrance */
 .app {
   animation: slideUp var(--transition-fade) ease;
+}
+
+/* ============================================================================
+   LAYOUT
+   ============================================================================ */
+.app {
   max-width: 1100px;
   margin: var(--spacing-xl) auto;
   padding: var(--spacing-lg);
 }
 
-/* ============================================================================
-   2. LAYOUT & TOPBAR
-   ============================================================================ */
 .topbar {
   display: flex;
   align-items: center;
@@ -148,7 +139,7 @@ main {
 }
 
 /* ============================================================================
-   3. CONNECTION PANEL
+   CONNECTION PANEL
    ============================================================================ */
 .connect {
   background: var(--panel);
@@ -232,7 +223,7 @@ main {
 }
 
 /* ============================================================================
-   4. TERMINAL AREA
+   TERMINAL AREA
    ============================================================================ */
 .terminal-area {
   background: var(--panel);
@@ -330,7 +321,9 @@ main {
   transform: scale(1.15);
 }
 
-/* Fullscreen States */
+/* ============================================================================
+   FULLSCREEN STATES
+   ============================================================================ */
 .terminal-area:fullscreen,
 .terminal-area:-webkit-full-screen,
 .terminal-area:-moz-full-screen,
@@ -352,7 +345,9 @@ main {
   height: 100%;
 }
 
-/* Footer (Layout) */
+/* ============================================================================
+   FOOTER
+   ============================================================================ */
 .footer {
   margin-top: var(--spacing-md);
   text-align: center;
@@ -361,31 +356,129 @@ main {
   animation: fadeIn var(--transition-fade) ease 400ms both;
 }
 
-/* Security Disclaimer */
-.security-disclaimer {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-sm) var(--spacing-md);
+/* ============================================================================
+   AUTH BANNER
+   ============================================================================ */
+.auth-banner {
   margin-bottom: var(--spacing-md);
-  background: linear-gradient(135deg, rgba(110, 231, 183, 0.1), rgba(14, 184, 183, 0.05));
-  border: 1px solid rgba(110, 231, 183, 0.2);
+  padding: var(--spacing-sm) var(--spacing-md);
   border-radius: var(--radius-sm);
-  color: var(--accent);
-  font-size: 12px;
-  line-height: 1.4;
-  animation: fadeIn var(--transition-smooth) ease;
+  font-size: 13px;
+  text-align: center;
+  cursor: pointer;
+  background: var(--glass);
+  color: var(--text-primary);
+  transition: opacity var(--transition-fade), transform var(--transition-smooth), box-shadow var(--transition-smooth);
+  animation: slideDown var(--transition-smooth) ease;
 }
 
-.security-disclaimer i {
-  color: var(--accent);
-  font-size: 14px;
-  flex-shrink: 0;
+.auth-banner:not([hidden]) {
+  animation: slideDown var(--transition-smooth) ease;
+}
+
+.auth-banner[hidden] {
+  display: none;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.auth-banner--success {
+  background: #16a34a;
+  color: #ecfdf3;
+  box-shadow: 0 4px 12px rgba(22, 163, 74, 0.2);
+}
+
+.auth-banner--error {
+  background: #b91c1c;
+  color: #fee2e2;
+  box-shadow: 0 4px 12px rgba(185, 28, 28, 0.2);
+}
+
+.auth-banner--info {
+  background: #0ea5e9;
+  color: #e0f2fe;
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.2);
+}
+
+.auth-banner:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
 }
 
 /* ============================================================================
-   5. APP MANAGEMENT & MODALS
+   VIRTUAL KEYBOARD
    ============================================================================ */
+.keyboard-container {
+  display: none; /* Hidden by default */
+  grid-column: 1 / -1;
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-sm);
+  background: var(--panel);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-light);
+  user-select: none;
+  transition: opacity var(--transition-smooth), transform var(--transition-smooth);
+  animation: slideUp var(--transition-fade) ease 500ms both;
+}
+
+.keyboard-row {
+  display: flex;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-xs);
+}
+
+.keyboard-key {
+  padding: 0;
+  margin: 0;
+  height: 40px;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-light);
+  background: var(--glass);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
+}
+
+.keyboard-key:active,
+.keyboard-key--active {
+  background: var(--accent);
+  color: #042024;
+  border-color: var(--accent);
+  transform: translateY(-2px) scale(0.98);
+  box-shadow: 0 2px 8px rgba(110, 231, 183, 0.3);
+  transition: transform 60ms ease, box-shadow 60ms ease, background-color 60ms ease;
+}
+
+.keyboard-key:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+/* Style for the language switcher key */
+.keyboard-key[data-code="Lang"] {
+  background-color: #0e7490; /* A distinct but fitting color */
+  border-color: #155e75;
+}
+
+.keyboard-key[data-code="Lang"]:active {
+  background-color: #164e63;
+}
+
+
+/* ==========================================================================
+   APP MANAGEMENT
+   ========================================================================== */
 .topbar-right {
   display: flex;
   align-items: center;
@@ -549,8 +642,8 @@ main {
 }
 
 .connection-actions .edit-btn {
-  background: #0369a1; /* Darker blue for better contrast */
-  color: #ffffff;
+  background: #0ea5e9;
+  color: #e0f2fe;
 }
 
 .connection-actions .delete-btn {
@@ -559,9 +652,9 @@ main {
 }
 
 .connection-actions .edit-btn:hover {
-  background: #075985; /* Darker blue for hover */
+  background: #0284c7;
   transform: translateY(-1px);
-  box-shadow: 0 2px 6px rgba(7, 89, 133, 0.3);
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.3);
 }
 
 .connection-actions .delete-btn:hover {
@@ -594,119 +687,32 @@ main {
 }
 
 /* ============================================================================
-   6. UTILITIES & ANIMATIONS
+   SECURITY DISCLAIMER
    ============================================================================ */
-/* Auth Banner */
-.auth-banner {
-  margin-bottom: var(--spacing-md);
-  padding: var(--spacing-sm) var(--spacing-md);
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  text-align: center;
-  cursor: pointer;
-  background: var(--glass);
-  color: var(--text-primary);
-  transition: opacity var(--transition-fade), transform var(--transition-smooth), box-shadow var(--transition-smooth);
-  animation: slideDown var(--transition-smooth) ease;
-}
-
-.auth-banner:not([hidden]) {
-  animation: slideDown var(--transition-smooth) ease;
-}
-
-.auth-banner[hidden] {
-  display: none;
-}
-
-.auth-banner--success {
-  background: #15803d; /* Darker green for better contrast */
-  color: #ffffff;
-  box-shadow: 0 4px 12px rgba(21, 128, 61, 0.2);
-}
-
-.auth-banner--error {
-  background: #b91c1c;
-  color: #fee2e2;
-  box-shadow: 0 4px 12px rgba(185, 28, 28, 0.2);
-}
-
-.auth-banner--info {
-  background: #0369a1; /* Darker blue for better contrast */
-  color: #ffffff;
-  box-shadow: 0 4px 12px rgba(3, 105, 161, 0.2);
-}
-
-.auth-banner:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
-}
-
-/* Virtual Keyboard */
-.keyboard-container {
-  display: none; /* Hidden by default */
-  grid-column: 1 / -1;
-  margin-top: var(--spacing-md);
-  padding: var(--spacing-sm);
-  background: var(--panel);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-light);
-  user-select: none;
-  transition: opacity var(--transition-smooth), transform var(--transition-smooth);
-  animation: slideUp var(--transition-fade) ease 500ms both;
-}
-
-.keyboard-row {
-  display: flex;
-  justify-content: center;
-  gap: var(--spacing-xs);
-  margin-bottom: var(--spacing-xs);
-}
-
-.keyboard-key {
-  padding: 0;
-  margin: 0;
-  height: 40px;
-  flex: 1;
+.security-disclaimer {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+  background: linear-gradient(135deg, rgba(110, 231, 183, 0.1), rgba(14, 184, 183, 0.05));
+  border: 1px solid rgba(110, 231, 183, 0.2);
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border-light);
-  background: var(--glass);
-  color: var(--text-primary);
-  font-family: var(--font-sans);
+  color: var(--accent);
+  font-size: 12px;
+  line-height: 1.4;
+  animation: fadeIn var(--transition-smooth) ease;
+}
+
+.security-disclaimer i {
+  color: var(--accent);
   font-size: 14px;
-  cursor: pointer;
-  transition: background-color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
+  flex-shrink: 0;
 }
 
-.keyboard-key:active,
-.keyboard-key--active {
-  background: var(--accent);
-  color: #042024;
-  border-color: var(--accent);
-  transform: translateY(-2px) scale(0.98);
-  box-shadow: 0 2px 8px rgba(110, 231, 183, 0.3);
-  transition: transform 60ms ease, box-shadow 60ms ease, background-color 60ms ease;
-}
-
-.keyboard-key:hover {
-  border-color: var(--accent);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
-}
-
-/* Style for the language switcher key */
-.keyboard-key[data-code="Lang"] {
-  background-color: #0e7490; /* A distinct but fitting color */
-  border-color: #155e75;
-}
-
-.keyboard-key[data-code="Lang"]:active {
-  background-color: #164e63;
-}
-
-/* Inline Style Replacements */
+/* ============================================================================
+   INLINE STYLE REPLACEMENTS
+   ============================================================================ */
 .label-hidden {
   display: none;
 }
@@ -737,7 +743,9 @@ main {
 }
 
 /* ============================================================================
-   7. RESPONSIVE DESIGN
+   RESPONSIVE DESIGN
+   - Stack layout and show virtual keyboard on smaller screens
+   - Simplify app management grid for mobile
    ============================================================================ */
 @media (max-width: 1279px) {
   main {
