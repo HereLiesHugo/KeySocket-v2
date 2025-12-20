@@ -386,28 +386,6 @@ const sessionMiddleware = session(sessionConfig);
 app.use(cookieParser(process.env.SESSION_SECRET));
 app.use(sessionMiddleware);
 
-// CSRF protection middleware
-const { doubleCsrf } = require('csrf-csrf');
-const csrfInstance = doubleCsrf({
-  getSecret: () => process.env.CSRF_SECRET || process.env.SESSION_SECRET, // Fallback to SESSION_SECRET if CSRF_SECRET not set
-  cookie: {
-    name: '__Host-psifi.x-csrf-token', // Recommended cookie name for security
-    httpOnly: true,
-    secure: cookieSecure,
-    sameSite: cookieSameSite
-  },
-  ignoredMethods: ['GET', 'HEAD', 'OPTIONS']
-});
-app.use(csrfInstance.doubleCsrfProtection);
-
-// Log CSRF configuration
-logger.info('CSRF protection configured', {
-  csrf_secret_set: !!process.env.CSRF_SECRET,
-  using_fallback: !process.env.CSRF_SECRET,
-  cookie_secure: cookieSecure,
-  cookie_sameSite: cookieSameSite
-});
-
 console.log(`[Server] Session store type: ${typeof sessionStore}`);
 console.log(`[Server] Session store has get method: ${typeof sessionStore.get}`);
 
@@ -576,10 +554,7 @@ app.get('/auth/status', (req, res) => {
   res.json({ authenticated: isAuth, user });
 });
 
-// CSRF token endpoint for frontend
-app.get('/csrf-token', (req, res) => {
-  res.json({ csrfToken: csrfInstance.generateToken(req, res) });
-});
+
 
 // Rate limit all requests (basic protection)
 const limiter = rateLimit({
