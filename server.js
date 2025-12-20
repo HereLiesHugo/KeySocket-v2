@@ -383,14 +383,15 @@ logger.info('Session configuration', {
   store_encrypted: !!process.env.FILESTORE_ENCRYPTION_KEY
 });
 const sessionMiddleware = session(sessionConfig);
-app.use(cookieParser(process.env.SESSION_SECRET)); // ADDED: Required for csrf-csrf to read cookies
+app.use(cookieParser(process.env.SESSION_SECRET));
 app.use(sessionMiddleware);
 
 // CSRF protection middleware
 const { doubleCsrf } = require('csrf-csrf');
 const csrfInstance = doubleCsrf({
-  getSecret: () => process.env.SESSION_SECRET,
+  getSecret: () => process.env.CSRF_SECRET || process.env.SESSION_SECRET, // Fallback to SESSION_SECRET if CSRF_SECRET not set
   cookie: {
+    name: '__Host-psifi.x-csrf-token', // Recommended cookie name for security
     httpOnly: true,
     secure: cookieSecure,
     sameSite: cookieSameSite
@@ -398,6 +399,14 @@ const csrfInstance = doubleCsrf({
   ignoredMethods: ['GET', 'HEAD', 'OPTIONS']
 });
 app.use(csrfInstance.doubleCsrfProtection);
+
+// Log CSRF configuration
+logger.info('CSRF protection configured', {
+  csrf_secret_set: !!process.env.CSRF_SECRET,
+  using_fallback: !process.env.CSRF_SECRET,
+  cookie_secure: cookieSecure,
+  cookie_sameSite: cookieSameSite
+});
 
 console.log(`[Server] Session store type: ${typeof sessionStore}`);
 console.log(`[Server] Session store has get method: ${typeof sessionStore.get}`);
