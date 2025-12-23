@@ -11,3 +11,34 @@ h1 {
     text-align: center;
     margin-top: 50px;
 }
+
+p {
+    text-align: center;
+    font-size: 18px;
+    margin: 20px;
+}
+
+h2 {
+    color: #f09d9a !important;
+    text-align: center;
+    margin-top: 30px;
+}
+ul {
+    list-style-type: none;
+    padding: 0;
+    text-align: center;
+}
+ul li {
+    display: inline;
+    margin: 0 15px;
+}
+ul li a {
+    color: #ffffff;
+    text-decoration: none;
+    font-size: 18px;
+    transition: transform 0.2s;
+}
+ul li a:hover {
+    text-decoration: underline;
+    transform: scale(1.3);
+}
