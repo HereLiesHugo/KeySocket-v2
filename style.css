@@ -36,9 +36,10 @@ ul li a {
     color: #ffffff;
     text-decoration: none;
     font-size: 18px;
-    transition: transform 0.2s;
+    transition: all 0.2s ease-in-out;
 }
 ul li a:hover {
     text-decoration: underline;
-    transform: scale(1.3);
+    transform: scale(1.1);
+
 }
