@@ -1,7 +1,7 @@
 require('dotenv').config();
-const net = require('net');
-const fs = require('fs');
-const path = require('path');
+const net = require('node:net');
+const fs = require('node:fs');
+const path = require('node:path');
 const express = require('express');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
@@ -10,13 +10,13 @@ const session = require('express-session');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const { WebSocketServer } = require('ws');
-const https = require('https');
-const http = require('http');
+const https = require('node:https');
+const http = require('node:http');
 const { Client } = require('ssh2');
-const { URL } = require('url');
+const { URL } = require('node:url');
 const cookie = require('cookie');
 const cookieParser = require('cookie-parser');
-const dns = require('dns').promises; // ADDED: Required for SSRF fix
+const dns = require('node:dns').promises; // ADDED: Required for SSRF fix
 
 // Enhanced logging system
 const logFile = path.join(__dirname, 'server.log');
@@ -78,7 +78,7 @@ const app = express();
 
 // ensure secure cookies (sessions) work when behind a proxy/CDN like Cloudflare
 // Allow explicit override with BEHIND_PROXY env var. Default to true (assume proxy in front).
-const BEHIND_PROXY = typeof process.env.BEHIND_PROXY !== 'undefined' ? (process.env.BEHIND_PROXY === 'true') : true;
+const BEHIND_PROXY = process.env.BEHIND_PROXY === undefined ? true : (process.env.BEHIND_PROXY === 'true');
 app.set('trust proxy', BEHIND_PROXY);
 logger.info('trust proxy set', { trust_proxy: BEHIND_PROXY });
 
@@ -191,9 +191,7 @@ app.use('/lib', express.static('lib', {
   etag: true,
   lastModified: true,
   setHeaders: (res, path) => {
-    if (path.endsWith('.js')) {
-      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-    } else if (path.endsWith('.css')) {
+    if (path.endsWith('.js') || path.endsWith('.css')) {
       res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     }
   }
@@ -207,17 +205,17 @@ app.use('/js', express.static('js', {
 
 // Helper: determine remote IP with proxy awareness
 function getReqRemoteIp(req) {
-  if (BEHIND_PROXY && req && req.headers && req.headers['x-forwarded-for']) {
+  if (BEHIND_PROXY && req?.headers?.['x-forwarded-for']) {
     // x-forwarded-for may be a comma-separated list
     return req.headers['x-forwarded-for'].split(',')[0].trim();
   }
-  return req && req.socket ? req.socket.remoteAddress : 'unknown';
+  return req?.socket?.remoteAddress || 'unknown';
 }
 
 // Session parser for WebSocket connections
 // Now accepts the full `req` object so we can bind/verify IPs and set timeouts
 function parseWebSocketSession(req, callback) {
-  const cookieHeader = req && req.headers ? req.headers.cookie : null;
+  const cookieHeader = req?.headers?.cookie || null;
   if (!cookieHeader) {
     logger.debug('WebSocket connection without cookie header', { ip: getReqRemoteIp(req) });
     return callback(null, null);
@@ -299,7 +297,7 @@ function parseWebSocketSession(req, callback) {
       const turnstileVerifiedIP = session.turnstileVerifiedIP || null;
 
       // Check if user is authenticated via Passport
-      if (session.passport && session.passport.user) {
+      if (session.passport?.user) {
         logger.info('WebSocket user authenticated successfully', {
           session_id: cleanSessionId,
           user_email: session.passport.user.email,
@@ -408,7 +406,7 @@ function cleanupExpiredSessions() {
 
     files.forEach(file => {
       // Validate and normalize path to prevent traversal
-      const normalizedFile = path.normalize(file).replace(/^(\.\.[\/\\])+/, '');
+      const normalizedFile = path.normalize(file).replace(/^(\.\.[/\\])+/, '');
       const filePath = path.resolve(sessionsDir, normalizedFile);
       
       // Ensure the resolved path is still within the sessions directory
@@ -493,7 +491,7 @@ app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.get('/auth/google',
   // If already authenticated, do not start a new OAuth flow
   (req, res, next) => {
-    if (req.isAuthenticated && req.isAuthenticated()) {
+    if (req.isAuthenticated?.()) {
       return res.redirect('/console?auth=already');
     }
     return next();
@@ -544,7 +542,7 @@ app.get('/logout', (req, res, next) => {
 
 // Simple endpoint to report current auth status to frontend
 app.get('/auth/status', (req, res) => {
-  const isAuth = !!(req.isAuthenticated && req.isAuthenticated());
+  const isAuth = !!(req.isAuthenticated?.());
   const user = isAuth && req.user ? {
     id: req.user.id,
     email: req.user.email,
@@ -590,17 +588,18 @@ app.get('/lib/xterm-addon-webgl.js', (req, res) => {
 
 // Asset version for cache-busting: use env `ASSET_VERSION`, package.json version, or timestamp
 const ASSET_VERSION = process.env.ASSET_VERSION || (() => {
-  try { return require(path.join(__dirname, 'package.json')).version || String(Date.now()); } catch (e) { return String(Date.now()); }
+  try { return require(path.join(__dirname, 'package.json')).version || String(Date.now()); } catch (error) { logger.debug('Failed to read package.json version', { error: error.message }); return String(Date.now()); }
 })();
 
 function serveConsole(req, res) {
   try {
     const consolePath = path.join(__dirname, 'console.html');
     let html = fs.readFileSync(consolePath, 'utf8');
-    html = html.replaceAll(/__ASSET_VERSION__/g, ASSET_VERSION);
+    html = html.replaceAll('__ASSET_VERSION__', ASSET_VERSION);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     return res.send(html);
-  } catch (e) {
+  } catch (error) {
+    logger.error('Failed to serve console page', { error: error.message });
     return res.status(500).send('Server error');
   }
 }
@@ -610,10 +609,11 @@ function serveIndex(req, res) {
     // Always serve the same HTML - let frontend handle authentication logic
     const indexPath = path.join(__dirname, 'index.html');
     let html = fs.readFileSync(indexPath, 'utf8');
-    html = html.replaceAll(/__ASSET_VERSION__/g, ASSET_VERSION);
+    html = html.replaceAll('__ASSET_VERSION__', ASSET_VERSION);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     return res.send(html);
-  } catch (e) {
+  } catch (error) {
+    logger.error('Failed to serve index page', { error: error.message });
     return res.status(500).send('Server error');
   }
 }
@@ -633,7 +633,7 @@ app.post('/turnstile-verify', (req, res) => {
   console.log('[Turnstile] Received verification request');
   console.log('[Turnstile] Request headers:', req.headers);
   console.log('[Turnstile] Request body:', req.body);
-  const token = (req.body && req.body.token) || '';
+  const token = req.body?.token || '';
   if (!token) return res.status(400).json({ ok: false, message: 'missing token' });
   if (!TURNSTILE_SECRET) {
     console.error('TURNSTILE_SECRET not configured in environment');
@@ -698,7 +698,8 @@ app.post('/turnstile-verify', (req, res) => {
         try {
           const parsed = JSON.parse(data);
           return resolve(parsed);
-        } catch (e) {
+        } catch (parseError) {
+          logger.error('Failed to parse Turnstile response', { error: parseError.message, body: data });
           const err = new Error('invalid json');
           err.body = data;
           return reject(err);
@@ -729,13 +730,13 @@ app.post('/turnstile-verify', (req, res) => {
   });
 
   verifyWithCloudflare().then((parsed) => {
-    if (parsed && parsed.success) {
+    if (parsed?.success) {
       if (!req.session) {
         logger.warn('[Turnstile] No session available for token storage');
         return res.status(500).json({ ok: false, message: 'session required' });
       }
 
-      const serverToken = require('crypto').randomBytes(24).toString('hex');
+      const serverToken = require('node:crypto').randomBytes(24).toString('hex');
       const expires = Date.now() + TURNSTILE_TOKEN_TTL_MS;
 
             req.session.turnstileToken = serverToken;
@@ -743,7 +744,8 @@ app.post('/turnstile-verify', (req, res) => {
             // Store the client's IP as seen by the app (respecting proxy headers)
             try {
               req.session.turnstileVerifiedIP = getReqRemoteIp(req) || '';
-            } catch (e) {
+            } catch (error) {
+              logger.debug('Failed to get remote IP for Turnstile verification', { error: error.message });
               req.session.turnstileVerifiedIP = req.socket.remoteAddress || '';
             }
 
@@ -767,9 +769,9 @@ app.post('/turnstile-verify', (req, res) => {
       return res.status(400).json({ ok: false, message: 'verification failed', details: parsed });
     }
   }).catch((err) => {
-    logger.error('[Turnstile] Verification request failed', { error: err && err.message, status: err && err.status });
+    logger.error('[Turnstile] Verification request failed', { error: err?.message, status: err?.status });
     if (!res.headersSent) {
-      if (err && err.status && err.status >= 500) return res.status(502).json({ ok: false, message: 'turnstile provider error' });
+      if (err?.status >= 500) return res.status(502).json({ ok: false, message: 'turnstile provider error' });
       return res.status(500).json({ ok: false, message: 'verification error' });
     }
   });
@@ -811,10 +813,9 @@ if (USE_TLS && fs.existsSync(TLS_KEY) && fs.existsSync(TLS_CERT)) {
     logger.error('REQUIRE_TLS=true but USE_TLS=false. TLS enforcement misconfiguration.');
     console.error('FATAL: REQUIRE_TLS=true but USE_TLS=false. Exiting.');
     process.exit(1);
-  } else {
-    logger.info('Starting HTTP server (TLS disabled)');
-    server = http.createServer(app);
   }
+  logger.info('Starting HTTP server (TLS disabled)');
+  server = http.createServer(app);
 }
 
 // WebSocket server for /ssh with authentication
@@ -826,7 +827,7 @@ const wss = new WebSocketServer({
     // Parse and verify session during WebSocket upgrade
     parseWebSocketSession(info.req, async (err, sessionData) => {
       const remoteIp = getReqRemoteIp(info.req);
-      if (err || !sessionData || !sessionData.authenticated) {
+      if (err || !sessionData?.authenticated) {
         logger.warn('WebSocket upgrade rejected: unauthenticated or session error', { ip: remoteIp, err: err ? err.message : undefined });
         done(false, 401, 'Unauthorized: Authentication required');
         return;
@@ -839,13 +840,13 @@ const wss = new WebSocketServer({
         const protoHeader = info.req.headers['sec-websocket-protocol'];
         if (protoHeader) {
           tsToken = protoHeader.split(',')[0].trim();
-          if (tsToken && tsToken.startsWith('ts=')) tsToken = tsToken.slice(3);
+          if (tsToken?.startsWith('ts=')) tsToken = tsToken.slice(3);
         }
-        if (!tsToken && info.req.headers && info.req.headers.authorization) {
-          const m = info.req.headers.authorization.match(/^Bearer\s+(.*)$/i);
+        if (!tsToken && info.req.headers?.authorization) {
+          const m = /^Bearer\s+(.*)$/i.exec(info.req.headers.authorization);
           if (m) tsToken = m[1];
         }
-      } catch (e) { /* ignore parsing errors */ }
+      } catch (error) { logger.debug('Failed to parse WebSocket token', { error: error.message }); }
 
       // If a token is provided, consume and bind it to this session (persisting turnstileVerifiedIP)
       if (tsToken) {
@@ -868,13 +869,11 @@ const wss = new WebSocketServer({
         } catch (e) {
           logger.warn('Failed to bind turnstile token to session', { error: e.message });
         }
-      } else {
+      } else if (sessionData.turnstileVerifiedIP !== remoteIp) {
         // No token provided on upgrade — require session to have an IP-bound turnstile verification
-        if (!sessionData.turnstileVerifiedIP || sessionData.turnstileVerifiedIP !== remoteIp) {
-          logger.warn('WebSocket upgrade rejected: missing or mismatched turnstile binding on session', { ip: remoteIp, session_turnstile_ip: sessionData.turnstileVerifiedIP });
-          done(false, 401, 'Turnstile verification required');
-          return;
-        }
+        logger.warn('WebSocket upgrade rejected: missing or mismatched turnstile binding on session', { ip: remoteIp, session_turnstile_ip: sessionData.turnstileVerifiedIP });
+        done(false, 401, 'Turnstile verification required');
+        return;
       }
 
       logger.info('WebSocket upgrade accepted', { ip: remoteIp, user: sessionData.user.email });
@@ -910,7 +909,7 @@ function decrIp(ip) {
 }
 
 function safeParseJson(message) {
-  try { return JSON.parse(message); } catch (e) { return null; }
+  try { return JSON.parse(message); } catch (error) { logger.debug('Failed to parse JSON message', { error: error.message }); return null; }
 }
 
 // SSH brute-force protection functions
@@ -923,11 +922,7 @@ function checkSshAttempts(userId) {
     attempts.count = 0;
   }
   
-  if (attempts.count >= MAX_SSH_ATTEMPTS_PER_USER) {
-    return false; // Block attempt
-  }
-  
-  return true; // Allow attempt
+  return attempts.count < MAX_SSH_ATTEMPTS_PER_USER;
 }
 
 function incrementSshAttempts(userId) {
@@ -973,14 +968,14 @@ function isPrivateOrLocalIP(input) {
         if (Number.isNaN(intVal)) return true;
         ip = intToIp(intVal);
       }
-    } catch (e) { return true; }
+    } catch (error) { logger.debug('Failed to parse hex IP format', { ip, error: error.message }); return true; }
   }
   
   // 2. Handle Octal (leading 0) - e.g., 0177.0.0.1
   else if (ip.startsWith('0') && ip.includes('.') && /^[0-7.]+$/.test(ip)) {
       try {
         ip = ip.split('.').map(part => Number.parseInt(part, 8)).join('.');
-      } catch (e) { return true; }
+      } catch (error) { logger.debug('Failed to parse octal IP format', { ip, error: error.message }); return true; }
   }
 
   // 3. Handle Decimal (Flat Integer) e.g. 2130706433
@@ -989,7 +984,7 @@ function isPrivateOrLocalIP(input) {
       const decimal = Number.parseInt(ip, 10);
       if (decimal < 0 || decimal > 0xFFFFFFFF) return true; // Invalid range
       ip = intToIp(decimal);
-    } catch (e) { return true; }
+    } catch (error) { logger.debug('Failed to parse decimal IP format', { ip, error: error.message }); return true; }
   }
 
   // Basic localhost variations
@@ -1200,11 +1195,11 @@ wss.on('connection', (ws, req) => {
   logger.info('New WebSocket connection attempt', {
     ip: ip,
     user_agent: userAgent,
-    authenticated: !!(sessionData && sessionData.authenticated),
+    authenticated: !!sessionData?.authenticated,
     user_email: sessionData?.user?.email || 'anonymous'
   });
 
-  if (!sessionData || !sessionData.authenticated) {
+  if (!sessionData?.authenticated) {
     logger.warn('Rejecting unauthenticated WebSocket connection', {
       ip: ip,
       user_agent: userAgent
@@ -1245,7 +1240,8 @@ wss.on('connection', (ws, req) => {
   ws.on('message', async (msg, isBinary) => {
     if (!alive) return;
     if (!isBinary) {
-      const parsed = safeParseJson(msg.toString());
+      const msgStr = typeof msg === 'string' ? msg : msg.toString();
+      const parsed = safeParseJson(msgStr);
       if (!parsed) return;
       if (parsed.type === 'connect') {
         const { host, port, username, auth, token } = parsed;
@@ -1264,8 +1260,7 @@ wss.on('connection', (ws, req) => {
         
         // Check session for valid Turnstile token
         const session = sessionData.session;
-        if (!session || 
-            !session.turnstileToken || 
+        if (!session?.turnstileToken || 
             session.turnstileToken !== token ||
             !session.turnstileTokenExpires ||
             session.turnstileTokenExpires < Date.now()) {
@@ -1273,8 +1268,8 @@ wss.on('connection', (ws, req) => {
             user_email: sessionData.user.email,
             source_ip: ip,
             token_present: !!token,
-            session_token_present: !!(session && session.turnstileToken),
-            token_match: session && session.turnstileToken === token,
+            session_token_present: !!session?.turnstileToken,
+            token_match: session?.turnstileToken === token,
             expired: session && session.turnstileTokenExpires < Date.now()
           });
           ws.send(JSON.stringify({ type: 'error', message: 'Invalid or expired Turnstile token' }));
@@ -1397,10 +1392,10 @@ wss.on('connection', (ws, req) => {
             ws._sshStream = stream;
             stream.on('data', (data) => {
               // send raw binary data back to client
-              try { ws.send(data); } catch (e) {}
+              try { ws.send(data); } catch (error) { logger.debug('Failed to send SSH data to WebSocket', { error: error.message }); }
             });
             stream.on('close', () => {
-              try { ws.send(JSON.stringify({ type: 'ssh-closed' })); } catch (e) {}
+              try { ws.send(JSON.stringify({ type: 'ssh-closed' })); } catch (error) { logger.debug('Failed to send SSH close message', { error: error.message }); }
               ws.close();
             });
           });
@@ -1450,7 +1445,7 @@ wss.on('connection', (ws, req) => {
       } else if (parsed.type === 'resize') {
         const cols = Number.parseInt(parsed.cols || '80', 10);
         const rows = Number.parseInt(parsed.rows || '24', 10);
-        if (sshStream && sshStream.setWindow) sshStream.setWindow(rows, cols, rows * 8, cols * 8);
+        sshStream?.setWindow?.(rows, cols, rows * 8, cols * 8);
       }
       return;
     }
@@ -1472,7 +1467,7 @@ wss.on('connection', (ws, req) => {
 
   ws.on('close', () => {
     alive = false;
-    if (sshClient) try { sshClient.end(); } catch (e) {}
+    if (sshClient) try { sshClient.end(); } catch (error) { logger.debug('Failed to end SSH client', { error: error.message }); }
     decrIp(ip);
   });
 
@@ -1554,8 +1549,8 @@ function gracefulShutdown(signal) {
           logger.debug('WebSocket closed with code 1001');
         } catch (e) { 
           logger.debug('Error closing WebSocket, trying terminate', { error: e.message });
-          try { ws.terminate(); } catch (e2) { 
-            logger.debug('Error terminating WebSocket', { error: e2.message }); 
+          try { ws.terminate(); } catch (error_) { 
+            logger.debug('Error terminating WebSocket', { error: error_.message }); 
           }
         }
       } catch (e) { 
