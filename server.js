@@ -843,8 +843,10 @@ const wss = new WebSocketServer({
           if (tsToken?.startsWith('ts=')) tsToken = tsToken.slice(3);
         }
         if (!tsToken && info.req.headers?.authorization) {
-          const m = /^Bearer\s+(.*)$/i.exec(info.req.headers.authorization);
-          if (m) tsToken = m[1];
+          const auth = info.req.headers.authorization;
+          if (auth.toLowerCase().startsWith('bearer ')) {
+            tsToken = auth.slice(7).trim();
+          }
         }
       } catch (error) { logger.debug('Failed to parse WebSocket token', { error: error.message }); }
 
