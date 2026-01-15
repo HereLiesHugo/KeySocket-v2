@@ -27,6 +27,6 @@
   "scripts": {
     "start": "node server.js",
     "dev": "NODE_ENV=development node server.js",
-    "test": "node test_all.mjs"
+    "test": "node tests/test_all.js"
   }
 }

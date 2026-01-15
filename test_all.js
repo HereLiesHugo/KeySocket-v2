@@ -1,14 +1,17 @@
 /**
- * test_all.mjs
+ * test_all.js
  * Comprehensive Security & Feature Test Suite for KeySocket Server
+ * * Usage: 
+ * 1. Start your server in a separate terminal: node server.js
+ * 2. Run this script: node test_all.js
  */
 
-import 'dotenv/config';
-import axios from 'axios';
-import WebSocket from 'ws';
-import assert from 'node:assert';
-import 'colors';
-import net from 'node:net';
+require('dotenv').config();
+const axios = require('axios');
+const WebSocket = require('ws');
+const assert = require('node:assert');
+const colors = require('colors');
+const net = require('node:net');
 
 // Configuration
 const PORT = process.env.PORT || 3000;
@@ -40,51 +43,93 @@ async function runTest(name, testFn) {
 }
 
 // --- SECTION 1: WHITE-BOX LOGIC TESTING ---
-const intToIp = (int) => [
-  (int >>> 24) & 0xFF, (int >>> 16) & 0xFF, (int >>> 8) & 0xFF, int & 0xFF
-].join('.');
-
-function parseEncodedIp(ip) {
-  try {
-    if (ip.toLowerCase().includes('0x')) {
-      if (ip.includes('.')) return ip.split('.').map(part => Number.parseInt(part, 16)).join('.');
-      const intVal = Number.parseInt(ip, 16);
-      return Number.isNaN(intVal) ? null : intToIp(intVal);
-    }
-    if (ip.startsWith('0') && ip.includes('.') && /^[0-7.]+$/.test(ip)) {
-      return ip.split('.').map(part => Number.parseInt(part, 8)).join('.');
-    }
-    if (/^\d+$/.test(ip)) {
-      const decimal = Number.parseInt(ip, 10);
-      return (decimal < 0 || decimal > 0xFFFFFFFF) ? null : intToIp(decimal);
-    }
-  } catch { return null; }
-  return ip;
-}
-
-function checkIPv4Private(ip) {
-  return ip.startsWith('10.') || ip.startsWith('192.168.') || ip.startsWith('169.254.') || ip.startsWith('127.') || ip === '0.0.0.0' ||
-    (ip.startsWith('172.') && { '16':true,'17':true,'18':true,'19':true,'20':true,'21':true,'22':true,'23':true,'24':true,'25':true,'26':true,'27':true,'28':true,'29':true,'30':true,'31':true }[ip.split('.')[1]]);
-}
-
-function checkIPv6Private(ip) {
-  return ip.startsWith('fe80::') || ip.startsWith('fc') || ip.startsWith('fd') || ip === '::1' || ip === '::' ||
-    ip.startsWith('::ffff:127') || ip.startsWith('::ffff:192.168.') || ip.startsWith('::ffff:10.') || ip.startsWith('::ffff:172.');
-}
+// We replicate the crucial security logic from server.js to test edge cases 
+// without needing a live Google Session.
 
 const ssrfLogic = {
+  // UPDATED: Matches the fixed logic in server.js
   isPrivateOrLocalIP: function(input) {
-    const ip = parseEncodedIp(input);
-    if (!ip) return true;
-    if (ip === 'localhost' || ip === '127.0.0.1' || ip === '::1') return true;
-    if (net.isIP(ip)) {
-      return (net.isIPv4(ip) && checkIPv4Private(ip)) || (net.isIPv6(ip) && checkIPv6Private(ip));
+    let ip = input;
+
+    // Helper: Convert integer to Dotted-Quad string (e.g. 2130706433 -> 127.0.0.1)
+    const intToIp = (int) => {
+      return [
+        (int >>> 24) & 0xFF,
+        (int >>> 16) & 0xFF,
+        (int >>> 8) & 0xFF,
+        int & 0xFF
+      ].join('.');
+    };
+
+    // 1. Handle Hex (0x...) - handles dotted (0x7f.0x0... or 0x7f000001)
+    if (ip.toLowerCase().includes('0x')) {
+      try {
+        if (ip.includes('.')) {
+          // Dotted hex: 0x7F.0x00.0x00.0x01
+          ip = ip.split('.').map(part => Number.parseInt(part, 16)).join('.');
+        } else {
+          // Flat hex: 0x7f000001
+          const intVal = Number.parseInt(ip, 16);
+          if (Number.isNaN(intVal)) return true;
+          ip = intToIp(intVal);
+        }
+      } catch (e) { return true; }
     }
+    
+    // 2. Handle Octal (leading 0) - e.g., 0177.0.0.1
+    else if (ip.startsWith('0') && ip.includes('.') && /^[0-7.]+$/.test(ip)) {
+        try {
+          ip = ip.split('.').map(part => Number.parseInt(part, 8)).join('.');
+        } catch (e) { return true; }
+    }
+
+    // 3. Handle Decimal (Flat Integer) e.g. 2130706433
+    else if (/^\d+$/.test(ip)) {
+      try {
+        const decimal = Number.parseInt(ip, 10);
+        if (decimal < 0 || decimal > 0xFFFFFFFF) return true; // Invalid range
+        ip = intToIp(decimal);
+      } catch (e) { return true; }
+    }
+
+    // Basic localhost variations
+    if (ip === 'localhost' || ip === '127.0.0.1' || ip === '::1') return true;
+
+    // Standard Node.js IP checks
+    if (net.isIP(ip)) {
+      return (
+        net.isIPv4(ip) && (
+          ip.startsWith('10.') ||
+          ip.startsWith('192.168.') ||
+          (ip.startsWith('172.') && {
+            '16': true, '17': true, '18': true, '19': true,
+            '20': true, '21': true, '22': true, '23': true,
+            '24': true, '25': true, '26': true, '27': true,
+            '28': true, '29': true, '30': true, '31': true
+          }[ip.split('.')[1]]) ||
+          ip.startsWith('169.254.') || // Link-local
+          ip.startsWith('127.') || // Loopback
+          ip === '0.0.0.0' // Unspecified
+        ) ||
+        net.isIPv6(ip) && (
+          ip.startsWith('fe80::') || // Link-local
+          ip.startsWith('fc') || // Private
+          ip.startsWith('fd') || // Private
+          ip === '::1' || // Loopback
+          ip.startsWith('::ffff:127') || // IPv4-mapped localhost
+          ip.startsWith('::ffff:192.168.') || 
+          ip.startsWith('::ffff:10.') || 
+          ip.startsWith('::ffff:172.') || 
+          ip === '::' // Unspecified
+        )
+      );
+    }
+
     return false;
   }
 };
 
-async function main() {
+(async function main() {
 
   console.log(`[Phase 1] Unit Testing Security Logic (SSRF)`.yellow.bold);
   
@@ -107,6 +152,7 @@ async function main() {
 
   await runTest('SSRF: Detect Octal/Hex Obfuscation', async () => {
     assert.strictEqual(ssrfLogic.isPrivateOrLocalIP('0177.0.0.1'), true); // Octal 127.0.0.1
+    // This previously failed, but should now pass with updated logic
     assert.strictEqual(ssrfLogic.isPrivateOrLocalIP('0x7f000001'), true); // Hex 127.0.0.1
     assert.strictEqual(ssrfLogic.isPrivateOrLocalIP('2130706433'), true); // Decimal 127.0.0.1
   });
@@ -135,6 +181,7 @@ async function main() {
 
   await runTest('Security Headers: X-RateLimit', async () => {
     const res = await axios.get(`${BASE_URL}/`);
+    // NOTE: This requires 'legacyHeaders: true' in server.js rateLimit config
     assert.ok(res.headers['x-ratelimit-limit'], 'Rate limit headers missing');
   });
 
@@ -160,6 +207,7 @@ async function main() {
 
   // WebSocket / SSH Security
   await runTest('WebSocket: Reject without Cookie/Auth', async () => {
+    // We attempt to connect to the SSH websocket without a session cookie
     const wsPromise = new Promise((resolve, reject) => {
       const wsUrl = BASE_URL.replace('http', 'ws') + '/ssh';
       const ws = new WebSocket(wsUrl);
@@ -170,6 +218,7 @@ async function main() {
       });
 
       ws.on('error', (err) => {
+        // ws library throws error on 401/403
         if (err.message.includes('401') || err.message.includes('403') || err.message.includes('Unexpected server response')) {
           resolve();
         } else {
@@ -191,10 +240,15 @@ async function main() {
   console.log(`\n[Phase 3] Stress / Rate Limit Testing`.yellow.bold);
 
   await runTest('Rate Limiting: Detect limit enforcement', async () => {
+    // This is aggressive, verify configured RATE_LIMIT in .env (default 120)
+    // We will fire requests until we hit a 429
     let hitLimit = false;
+    
+    // Create an axios instance that ignores status codes so 429 doesn't throw
     const client = axios.create({ validateStatus: () => true });
     
-    for (let i = 0; i < 20; i++) {
+    // We run this sequentially to be kind to the socket pool, but fast
+    for (let i = 0; i < 20; i++) { // Only try 20 bursts to see if headers update
        const res = await client.get(`${BASE_URL}/health`);
        const remaining = res.headers['x-ratelimit-remaining'];
        if (res.status === 429 || remaining === '0') {
@@ -203,6 +257,8 @@ async function main() {
        }
     }
     
+    // Note: We might not hit the limit if the test loop size < configured limit
+    // But we check if headers exist to prove the mechanism is active
     if (!hitLimit) {
       const res = await client.get(`${BASE_URL}/health`);
       assert.ok(res.headers['x-ratelimit-remaining'], 'Rate limit headers should be present');
@@ -215,11 +271,5 @@ async function main() {
   
   if (failed > 0) process.exit(1);
   process.exit(0);
-}
 
-try {
-  await main();
-} catch (err) {
-  console.error('Fatal test error:', err);
-  process.exit(1);
-}
+})();
