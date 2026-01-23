@@ -404,8 +404,28 @@ function initializeContactForm() {
 }
 
 function isValidEmail(email) {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
+    // Lightweight, linear-time email validation to avoid catastrophic
+    // backtracking from complex regex patterns. This checks basic
+    // structural requirements without attempting full RFC compliance.
+    if (typeof email !== 'string') return false;
+    if (email.length === 0 || email.length > 254) return false;
+    // No whitespace allowed
+    if (email.indexOf(' ') !== -1) return false;
+
+    const atIndex = email.indexOf('@');
+    // Must contain exactly one '@' not at start or end
+    if (atIndex <= 0 || atIndex !== email.lastIndexOf('@') || atIndex === email.length - 1) {
+        return false;
+    }
+
+    const dotIndex = email.lastIndexOf('.');
+    // Require a dot after the '@' with at least one character in between,
+    // and not as the last character
+    if (dotIndex <= atIndex + 1 || dotIndex === email.length - 1) {
+        return false;
+    }
+
+    return true;
 }
 
 // Notification System
