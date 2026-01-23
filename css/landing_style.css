@@ -577,18 +577,7 @@ body {
     margin-right: auto;
 }
 
-.terminal-demo .terminal-header {
-    background: #2d3748;
-    padding: 12px 16px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-
 .terminal-demo .terminal-body {
-    background: #1a202c;
-    padding: 20px;
-    font-family: 'Courier New', monospace;
     min-height: 400px;
     color: #e2e8f0;
     overflow-y: auto;
@@ -846,41 +835,11 @@ body {
 }
 
 @media (max-width: 480px) {
-    .container {
-        padding: 0 15px;
-    }
+    .container { padding: 0 15px; }
 
-    .hero-title {
-        font-size: 2rem;
-    }
-
-    .hero-subtitle {
-        font-size: 1.1rem;
-    }
-
-    .section-title {
-        font-size: 2rem;
-    }
-
+    .hero-title { font-size: 2rem; }
+    .hero-subtitle { font-size: 1.1rem; }
+    .section-title { font-size: 2rem; }
     .feature-card,
-    .security-item {
-        padding: 1.5rem;
-    }
-
-    .hero-title {
-        font-size: 2rem;
-    }
-
-    .hero-subtitle {
-        font-size: 1.1rem;
-    }
-
-    .section-title {
-        font-size: 2rem;
-    }
-
-    .feature-card,
-    .security-item {
-        padding: 1.5rem;
-    }
+    .security-item { padding: 1.5rem; }
 }

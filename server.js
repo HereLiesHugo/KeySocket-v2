@@ -404,10 +404,16 @@ function cleanupExpiredSessions() {
 
     logger.debug(`Found ${files.length} session files to check`);
 
-    files.forEach(file => {
-      // Validate and normalize path to prevent traversal
-      const normalizedFile = path.normalize(file).replace(/^(\.\.[/\\])+/, '');
-      const filePath = path.resolve(sessionsDir, normalizedFile);
+      files.forEach(file => {
+        // Validate and normalize path to prevent traversal
+        // Avoid using a regex with nested quantifiers which could be
+        // susceptible to catastrophic backtracking on malicious input.
+        let normalizedFile = path.normalize(file);
+        // Safely strip any leading "..\/" or "..\\" sequences in linear time
+        while (normalizedFile.startsWith('..' + path.sep) || normalizedFile.startsWith('../') || normalizedFile.startsWith('..\\')) {
+          normalizedFile = normalizedFile.slice(3);
+        }
+        const filePath = path.resolve(sessionsDir, normalizedFile);
       
       // Ensure the resolved path is still within the sessions directory
       if (!filePath.startsWith(path.resolve(sessionsDir))) {
@@ -843,8 +849,10 @@ const wss = new WebSocketServer({
           if (tsToken?.startsWith('ts=')) tsToken = tsToken.slice(3);
         }
         if (!tsToken && info.req.headers?.authorization) {
-          const m = /^Bearer\s+(.*)$/i.exec(info.req.headers.authorization);
-          if (m) tsToken = m[1];
+          const auth = info.req.headers.authorization;
+          if (auth.toLowerCase().startsWith('bearer ')) {
+            tsToken = auth.slice(7).trim();
+          }
         }
       } catch (error) { logger.debug('Failed to parse WebSocket token', { error: error.message }); }
 
