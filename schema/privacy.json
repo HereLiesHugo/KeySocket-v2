@@ -1,0 +1,18 @@
+{
+  "@context": "https://schema.org",
+  "@type": "WebPage",
+  "name": "Privacy Policy",
+  "description": "KeySocket's comprehensive privacy policy and data protection practices",
+  "url": "https://keysocket.eu/privacy",
+  "isPartOf": {
+    "@type": "WebSite",
+    "name": "KeySocket",
+    "url": "https://keysocket.eu"
+  },
+  "dateModified": "2026-01-28",
+  "author": {
+    "@type": "Organization",
+    "name": "KeySocket.eu",
+    "url": "https://keysocket.eu"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "KeySocket Console",
+  "description": "Secure web-based SSH terminal for remote server access",
+  "url": "https://keysocket.eu/console",
+  "applicationCategory": "DeveloperApplication",
+  "operatingSystem": "Web Browser",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "EUR"
+  },
+  "author": {
+    "@type": "Organization",
+    "name": "KeySocket.eu",
+    "url": "https://keysocket.eu"
+  },
+  "isPartOf": {
+    "@type": "WebSite",
+    "name": "KeySocket",
+    "url": "https://keysocket.eu"
+  }
+}
