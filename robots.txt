@@ -1,23 +1,17 @@
-# Google crawlers specifically allowed for proper indexing
-User-agent: Googlebot
+# Allow indexing of public pages
+User-agent: *
 Allow: /
-Allow: /$
-Allow: /css/
-Allow: /js/
-Allow: /images/
-Allow: /lib/
-Allow: /pages/privacy.html
 Disallow: /admin
 Disallow: /api
-Disallow: /private
+Disallow: /auth
 Disallow: /socket.io/
-Disallow: /auth/
-Disallow: /turnstile-verify
-Disallow: /*.json$
+Disallow: /private
 
-User-agent: Googlebot-Image
-Allow: /images/
-Allow: /css/
+# Don't index the console page
+Disallow: /console
+
+# Sitemap
+Sitemap: https://keysocket.eu/sitemap.xml
 Allow: /lib/
 
 User-agent: Googlebot-News
