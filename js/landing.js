@@ -105,7 +105,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }, 100));
 
     // Navbar scroll effect
-    let lastScrollTop = 0;
     const navbar = document.querySelector('.navbar');
     
     window.addEventListener('scroll', function() {
@@ -120,8 +119,6 @@ document.addEventListener('DOMContentLoaded', function() {
             navbar.style.background = 'rgba(15, 23, 42, 0.95)';
             navbar.style.boxShadow = 'none';
         }
-        
-        lastScrollTop = scrollTop;
     });
 
     // Initialize terminal demo
@@ -301,10 +298,10 @@ function initializeTerminal() {
     
     // Connect button functionality
     connectBtn.addEventListener('click', function() {
-        if (!isConnected) {
-            connectTerminal();
-        } else {
+        if (isConnected) {
             disconnectTerminal();
+        } else {
+            connectTerminal();
         }
     });
     
@@ -319,16 +316,18 @@ function initializeTerminal() {
         renderTerminal();
         scrollToBottom();
         
-        setTimeout(() => {
+        globalThis.setTimeout(() => {
             terminalLines.push('Establishing secure connection...');
             renderTerminal();
             scrollToBottom();
         }, 1000);
         
-        setTimeout(() => {
-            terminalLines.push('Authentication successful');
-            terminalLines.push('Connected to KeySocket Terminal');
-            terminalLines.push('$ ');
+        globalThis.setTimeout(() => {
+            terminalLines.push(
+                'Authentication successful',
+                'Connected to KeySocket Terminal',
+                '$ '
+            );
             renderTerminal();
             scrollToBottom();
             terminalElement.focus();
@@ -341,10 +340,12 @@ function initializeTerminal() {
         connectBtn.classList.remove('btn-secondary');
         connectBtn.classList.add('btn-primary');
         
-        terminalLines.push('Disconnecting...');
-        terminalLines.push('Connection closed.');
-        terminalLines.push('');
-        terminalLines.push('Click "Connect to SSH" to reconnect');
+        terminalLines.push(
+            'Disconnecting...',
+            'Connection closed.',
+            '',
+            'Click "Connect to SSH" to reconnect'
+        );
         renderTerminal();
         scrollToBottom();
     }
@@ -370,8 +371,7 @@ function initializeContactForm() {
     contactForm.addEventListener('submit', function(e) {
         e.preventDefault();
         
-        // Get form data
-        const formData = new FormData(contactForm);
+        // Get form values directly
         const name = contactForm.querySelector('input[type="text"]').value;
         const email = contactForm.querySelector('input[type="email"]').value;
         const message = contactForm.querySelector('textarea').value;
@@ -479,7 +479,7 @@ function showNotification(message, type = 'info') {
         notification.style.transform = 'translateX(100%)';
         setTimeout(() => {
             if (notification.parentNode) {
-                notification.parentNode.removeChild(notification);
+                notification.remove();
             }
         }, 300);
     }, 5000);
@@ -594,7 +594,7 @@ document.addEventListener('keydown', function(e) {
 });
 
 // Export functions for potential use by other scripts
-window.KeySocketLanding = {
+globalThis.KeySocketLanding = {
     showNotification,
     initializeTerminal,
     initializeTerminalTypingAnimation,
