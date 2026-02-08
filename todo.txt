@@ -1,4 +1,0 @@
-dynamic branch checking not working
-it should check if the branch is main or dev or something else and then use the appropriate URL
-it cant check the site because it wont know what the branch is
-it should check the js variable branchName (needs to be created)
