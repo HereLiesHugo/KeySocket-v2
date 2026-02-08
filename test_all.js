@@ -171,144 +171,148 @@ const ssrfLogic = {
   }
 };
 
-// Main test execution using top-level await
-console.log(`[Phase 1] Unit Testing Security Logic (SSRF)`.yellow.bold);
+// Main test execution using async IIFE to avoid top-level await issues in CommonJS
+(async function main() {
 
-await runTest('SSRF: Detect Localhost', async () => {
-  assert.strictEqual(ssrfLogic.isPrivateOrLocalIP('localhost'), true);
-  assert.strictEqual(ssrfLogic.isPrivateOrLocalIP('127.0.0.1'), true);
-});
-
-await runTest('SSRF: Detect Private Network (192.168.x.x)', async () => {
-  assert.strictEqual(ssrfLogic.isPrivateOrLocalIP('192.168.1.50'), true);
-});
-
-await runTest('SSRF: Detect Private Network (10.x.x.x)', async () => {
-  assert.strictEqual(ssrfLogic.isPrivateOrLocalIP('10.0.0.1'), true);
-});
-
-await runTest('SSRF: Detect AWS Metadata IP (169.254...)', async () => {
-  assert.strictEqual(ssrfLogic.isPrivateOrLocalIP('169.254.169.254'), true);
-});
-
-await runTest('SSRF: Detect Octal/Hex Obfuscation', async () => {
-  assert.strictEqual(ssrfLogic.isPrivateOrLocalIP('0177.0.0.1'), true); // Octal 127.0.0.1
-  // This previously failed, but should now pass with updated logic
-  assert.strictEqual(ssrfLogic.isPrivateOrLocalIP('0x7f000001'), true); // Hex 127.0.0.1
-  assert.strictEqual(ssrfLogic.isPrivateOrLocalIP('2130706433'), true); // Decimal 127.0.0.1
-});
-
-await runTest('SSRF: Allow Public IP', async () => {
-  assert.strictEqual(ssrfLogic.isPrivateOrLocalIP('8.8.8.8'), false);
-  assert.strictEqual(ssrfLogic.isPrivateOrLocalIP('1.1.1.1'), false);
-});
-
-console.log(`\n[Phase 2] Integration Testing (Running Server)`.yellow.bold);
-
-// Check connectivity
-await runTest('Server Reachability (Health Check)', async () => {
-  const res = await axios.get(`${BASE_URL}/health`);
-  assert.strictEqual(res.status, 200);
-  assert.ok(res.data.ok);
-});
-
-// Security Headers
-await runTest('Security Headers: Content-Security-Policy', async () => {
-  const res = await axios.get(`${BASE_URL}/`);
-  const csp = res.headers['content-security-policy'];
-  assert.ok(csp, 'CSP header missing');
-  assert.ok(csp.includes("default-src 'self'"), 'CSP too permissive');
-});
-
-await runTest('Security Headers: X-RateLimit', async () => {
-  const res = await axios.get(`${BASE_URL}/`);
-  // NOTE: This requires 'legacyHeaders: true' in server.js rateLimit config
-  assert.ok(res.headers['x-ratelimit-limit'], 'Rate limit headers missing');
-});
-
-// Auth Status
-await runTest('Auth Status: Unauthenticated initially', async () => {
-  const res = await axios.get(`${BASE_URL}/auth/status`);
-  assert.strictEqual(res.status, 200);
-  assert.strictEqual(res.data.authenticated, false);
-  assert.strictEqual(res.data.user, null);
-});
-
-// Turnstile Endpoint
-await runTest('Turnstile: Reject invalid token', async () => {
-  try {
-    await axios.post(`${BASE_URL}/turnstile-verify`, {
-      token: 'invalid-test-token'
-    });
-    throw new Error('Should have failed');
-  } catch (e) {
-    assert.ok(e.response.status === 400 || e.response.status === 500, 'Did not reject bad token');
-  }
-});
-
-// WebSocket / SSH Security
-await runTest('WebSocket: Reject without Cookie/Auth', async () => {
-  // We attempt to connect to the SSH websocket without a session cookie
-  const wsPromise = new Promise((resolve, reject) => {
-    const wsUrl = BASE_URL.replace('http', 'ws') + '/ssh';
-    const ws = new WebSocket(wsUrl);
-
-    ws.on('open', () => {
-      ws.close();
-      reject(new Error('Connection opened unexpectedly (should be blocked)'));
-    });
-
-    ws.on('error', (err) => {
-      // ws library throws error on 401/403
-      if (err.message.includes('401') || err.message.includes('403') || err.message.includes('Unexpected server response')) {
-        resolve();
-      } else {
-        reject(err);
-      }
-    });
+  console.log(`[Phase 1] Unit Testing Security Logic (SSRF)`.yellow.bold);
+  
+  await runTest('SSRF: Detect Localhost', async () => {
+    assert.strictEqual(ssrfLogic.isPrivateOrLocalIP('localhost'), true);
+    assert.strictEqual(ssrfLogic.isPrivateOrLocalIP('127.0.0.1'), true);
   });
 
-  await wsPromise;
-});
+  await runTest('SSRF: Detect Private Network (192.168.x.x)', async () => {
+    assert.strictEqual(ssrfLogic.isPrivateOrLocalIP('192.168.1.50'), true);
+  });
 
-// Static Files
-await runTest('Static Assets: xterm.js served', async () => {
-  const res = await axios.get(`${BASE_URL}/lib/xterm.js`);
-  assert.strictEqual(res.status, 200);
-  assert.ok(res.headers['content-type'].includes('javascript'));
-});
+  await runTest('SSRF: Detect Private Network (10.x.x.x)', async () => {
+    assert.strictEqual(ssrfLogic.isPrivateOrLocalIP('10.0.0.1'), true);
+  });
 
-console.log(`\n[Phase 3] Stress / Rate Limit Testing`.yellow.bold);
+  await runTest('SSRF: Detect AWS Metadata IP (169.254...)', async () => {
+    assert.strictEqual(ssrfLogic.isPrivateOrLocalIP('169.254.169.254'), true);
+  });
 
-await runTest('Rate Limiting: Detect limit enforcement', async () => {
-  // This is aggressive, verify configured RATE_LIMIT in .env (default 120)
-  // We will fire requests until we hit a 429
-  let hitLimit = false;
+  await runTest('SSRF: Detect Octal/Hex Obfuscation', async () => {
+    assert.strictEqual(ssrfLogic.isPrivateOrLocalIP('0177.0.0.1'), true); // Octal 127.0.0.1
+    // This previously failed, but should now pass with updated logic
+    assert.strictEqual(ssrfLogic.isPrivateOrLocalIP('0x7f000001'), true); // Hex 127.0.0.1
+    assert.strictEqual(ssrfLogic.isPrivateOrLocalIP('2130706433'), true); // Decimal 127.0.0.1
+  });
+
+  await runTest('SSRF: Allow Public IP', async () => {
+    assert.strictEqual(ssrfLogic.isPrivateOrLocalIP('8.8.8.8'), false);
+    assert.strictEqual(ssrfLogic.isPrivateOrLocalIP('1.1.1.1'), false);
+  });
+
+  console.log(`\n[Phase 2] Integration Testing (Running Server)`.yellow.bold);
+
+  // Check connectivity
+  await runTest('Server Reachability (Health Check)', async () => {
+    const res = await axios.get(`${BASE_URL}/health`);
+    assert.strictEqual(res.status, 200);
+    assert.ok(res.data.ok);
+  });
+
+  // Security Headers
+  await runTest('Security Headers: Content-Security-Policy', async () => {
+    const res = await axios.get(`${BASE_URL}/`);
+    const csp = res.headers['content-security-policy'];
+    assert.ok(csp, 'CSP header missing');
+    assert.ok(csp.includes("default-src 'self'"), 'CSP too permissive');
+  });
+
+  await runTest('Security Headers: X-RateLimit', async () => {
+    const res = await axios.get(`${BASE_URL}/`);
+    // NOTE: This requires 'legacyHeaders: true' in server.js rateLimit config
+    assert.ok(res.headers['x-ratelimit-limit'], 'Rate limit headers missing');
+  });
+
+  // Auth Status
+  await runTest('Auth Status: Unauthenticated initially', async () => {
+    const res = await axios.get(`${BASE_URL}/auth/status`);
+    assert.strictEqual(res.status, 200);
+    assert.strictEqual(res.data.authenticated, false);
+    assert.strictEqual(res.data.user, null);
+  });
+
+  // Turnstile Endpoint
+  await runTest('Turnstile: Reject invalid token', async () => {
+    try {
+      await axios.post(`${BASE_URL}/turnstile-verify`, {
+        token: 'invalid-test-token'
+      });
+      throw new Error('Should have failed');
+    } catch (e) {
+      assert.ok(e.response.status === 400 || e.response.status === 500, 'Did not reject bad token');
+    }
+  });
+
+  // WebSocket / SSH Security
+  await runTest('WebSocket: Reject without Cookie/Auth', async () => {
+    // We attempt to connect to the SSH websocket without a session cookie
+    const wsPromise = new Promise((resolve, reject) => {
+      const wsUrl = BASE_URL.replace('http', 'ws') + '/ssh';
+      const ws = new WebSocket(wsUrl);
+
+      ws.on('open', () => {
+        ws.close();
+        reject(new Error('Connection opened unexpectedly (should be blocked)'));
+      });
+
+      ws.on('error', (err) => {
+        // ws library throws error on 401/403
+        if (err.message.includes('401') || err.message.includes('403') || err.message.includes('Unexpected server response')) {
+          resolve();
+        } else {
+          reject(err);
+        }
+      });
+    });
+
+    await wsPromise;
+  });
+
+  // Static Files
+  await runTest('Static Assets: xterm.js served', async () => {
+    const res = await axios.get(`${BASE_URL}/lib/xterm.js`);
+    assert.strictEqual(res.status, 200);
+    assert.ok(res.headers['content-type'].includes('javascript'));
+  });
+
+  console.log(`\n[Phase 3] Stress / Rate Limit Testing`.yellow.bold);
+
+  await runTest('Rate Limiting: Detect limit enforcement', async () => {
+    // This is aggressive, verify configured RATE_LIMIT in .env (default 120)
+    // We will fire requests until we hit a 429
+    let hitLimit = false;
+    
+    // Create an axios instance that ignores status codes so 429 doesn't throw
+    const client = axios.create({ validateStatus: () => true });
+    
+    // We run this sequentially to be kind to the socket pool, but fast
+    for (let i = 0; i < 20; i++) { // Only try 20 bursts to see if headers update
+       const res = await client.get(`${BASE_URL}/health`);
+       const remaining = res.headers['x-ratelimit-remaining'];
+       if (res.status === 429 || remaining === '0') {
+         hitLimit = true;
+         break;
+       }
+    }
+    
+    // Note: We might not hit the limit if the test loop size < configured limit
+    // But we check if headers exist to prove the mechanism is active
+    if (!hitLimit) {
+      const res = await client.get(`${BASE_URL}/health`);
+      assert.ok(res.headers['x-ratelimit-remaining'], 'Rate limit headers should be present');
+      console.log(`      (Rate limit mechanism verified via headers)`.gray);
+    }
+  });
+
+  console.log('\n---------------------------------------------------');
+  console.log(`Tests Completed. Passed: ${passed}, Failed: ${failed}`.bold);
   
-  // Create an axios instance that ignores status codes so 429 doesn't throw
-  const client = axios.create({ validateStatus: () => true });
-  
-  // We run this sequentially to be kind to the socket pool, but fast
-  for (let i = 0; i < 20; i++) { // Only try 20 bursts to see if headers update
-     const res = await client.get(`${BASE_URL}/health`);
-     const remaining = res.headers['x-ratelimit-remaining'];
-     if (res.status === 429 || remaining === '0') {
-       hitLimit = true;
-       break;
-     }
-  }
-  
-  // Note: We might not hit the limit if the test loop size < configured limit
-  // But we check if headers exist to prove the mechanism is active
-  if (!hitLimit) {
-    const res = await client.get(`${BASE_URL}/health`);
-    assert.ok(res.headers['x-ratelimit-remaining'], 'Rate limit headers should be present');
-    console.log(`      (Rate limit mechanism verified via headers)`.gray);
-  }
-});
+  if (failed > 0) process.exit(1);
+  process.exit(0);
 
-console.log('\n---------------------------------------------------');
-console.log(`Tests Completed. Passed: ${passed}, Failed: ${failed}`.bold);
-
-if (failed > 0) process.exit(1);
-process.exit(0);
+})();
