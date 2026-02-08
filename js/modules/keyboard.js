@@ -70,8 +70,45 @@ export function initVirtualKeyboard(container, { getSocket, getTerminal }) {
 
     function sendToSocket(data) {
         const socket = getSocket();
-        if (!socket || socket.readyState !== WebSocket.OPEN) return;
+        if (socket?.readyState !== WebSocket.OPEN) return;
         socket.send(new TextEncoder().encode(data));
+    }
+
+    function handleModifierKey(code, keyEl) {
+        if (code === 'ShiftLeft' || code === 'ShiftRight') {
+            state.shift = !state.shift;
+            renderKeyboard();
+            return true;
+        }
+        if (code === 'ControlLeft') {
+            state.ctrl = !state.ctrl;
+            keyEl.classList.toggle('keyboard-key--active', state.ctrl);
+            return true;
+        }
+        if (code === 'Symbols') {
+            state.layout = (state.layout === 'qwerty' || state.layout === 'azerty') ? 'symbols' : state.layout;
+            renderKeyboard();
+            return true;
+        }
+        if (code === 'Lang') {
+            state.layout = state.layout === 'qwerty' ? 'azerty' : 'qwerty';
+            renderKeyboard();
+            return true;
+        }
+        return false;
+    }
+
+    function sendCharacter(char) {
+        if (state.ctrl && char.length === 1) {
+            const charCode = char.toUpperCase().codePointAt(0);
+            if (charCode >= 65 && charCode <= 90) { // A-Z
+                sendToSocket(String.fromCodePoint(charCode - 64));
+            } else {
+                sendToSocket(char);
+            }
+        } else {
+            sendToSocket(char);
+        }
     }
 
     function renderKeyboard() {
@@ -103,40 +140,12 @@ export function initVirtualKeyboard(container, { getSocket, getTerminal }) {
         const code = keyEl.dataset.code;
         const char = state.shift ? keyEl.dataset.shiftKey : keyEl.dataset.key;
 
-        if (code === 'ShiftLeft' || code === 'ShiftRight') {
-            state.shift = !state.shift;
-            renderKeyboard();
-            return;
-        }
-        if (code === 'ControlLeft') {
-            state.ctrl = !state.ctrl;
-            keyEl.classList.toggle('keyboard-key--active', state.ctrl);
-            return;
-        }
-        if (code === 'Symbols') {
-            state.layout = (state.layout === 'qwerty' || state.layout === 'azerty') ? 'symbols' : state.layout;
-            renderKeyboard();
-            return;
-        }
-        if (code === 'Lang') {
-            state.layout = state.layout === 'qwerty' ? 'azerty' : 'qwerty';
-            renderKeyboard();
-            return;
-        }
+        if (handleModifierKey(code, keyEl)) return;
 
         if (escapeCodes[code]) {
             sendToSocket(escapeCodes[code]);
         } else if (char) {
-            if (state.ctrl && char.length === 1) {
-                const charCode = char.toUpperCase().charCodeAt(0);
-                if (charCode >= 65 && charCode <= 90) { // A-Z
-                    sendToSocket(String.fromCharCode(charCode - 64));
-                } else {
-                    sendToSocket(char);
-                }
-            } else {
-                sendToSocket(char);
-            }
+            sendCharacter(char);
         }
 
         if (state.shift) {

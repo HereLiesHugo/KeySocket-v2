@@ -14,6 +14,7 @@ export function getConnections() {
     try {
         return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
     } catch (e) {
+        console.warn('Failed to parse saved connections:', e);
         return [];
     }
 }
@@ -66,7 +67,7 @@ export function loadSaved(savedList, renderManagementList) {
  */
 export function renderAppManagementConnections(container, list) {
     if (!container) return;
-    if (!list || !list.length) {
+    if (!list?.length) {
         container.innerHTML = '<p class="app-management-help">No saved connections yet. Save a connection from the main form, then manage it here.</p>';
         return;
     }
@@ -150,10 +151,10 @@ export function initAppManagement(elements, callbacks) {
             if (!target) return;
             const item = target.closest('.connection-item');
             if (!item) return;
-            const idxStr = item.getAttribute('data-index');
+            const idxStr = item.dataset.index;
             if (idxStr === null) return;
-            const idx = parseInt(idxStr, 10);
-            if (isNaN(idx)) return;
+            const idx = Number.parseInt(idxStr, 10);
+            if (Number.isNaN(idx)) return;
             const list = getConnections();
             const conn = list[idx];
             if (!conn) return;

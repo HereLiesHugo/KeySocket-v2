@@ -55,14 +55,12 @@ export function setAuthUI(authSelect, passwordLabel, keyLabel, passphraseLabel) 
  */
 export function initFullscreen(terminalArea, fullscreenBtn) {
     function toggleFullscreen() {
-        if (!document.fullscreenElement) {
-            if (terminalArea && terminalArea.requestFullscreen) {
-                terminalArea.requestFullscreen().catch(err => console.error('Fullscreen request failed:', err));
-            }
-            if (fullscreenBtn) fullscreenBtn.textContent = '⛶ Exit Fullscreen';
-        } else {
+        if (document.fullscreenElement) {
             document.exitFullscreen();
             if (fullscreenBtn) fullscreenBtn.textContent = '⛶ Fullscreen';
+        } else {
+            terminalArea?.requestFullscreen()?.catch(err => console.error('Fullscreen request failed:', err));
+            if (fullscreenBtn) fullscreenBtn.textContent = '⛶ Exit Fullscreen';
         }
     }
     
@@ -123,7 +121,7 @@ export function initResizeHandle(resizeHandle, terminalArea, onResize) {
  */
 export function showAuthBannerFromQuery(bannerEl) {
     try {
-        const params = new URLSearchParams(window.location.search || '');
+        const params = new URLSearchParams(globalThis.location.search || '');
         const status = params.get('auth');
         if (!status) return;
 
@@ -152,7 +150,9 @@ export function showAuthBannerFromQuery(bannerEl) {
         bannerEl.addEventListener('click', () => {
             bannerEl.hidden = true;
         }, { once: true });
-    } catch (e) { /* non-fatal */ }
+    } catch (e) {
+        console.warn('Failed to show auth banner from query:', e);
+    }
 }
 
 /**
@@ -163,13 +163,14 @@ export function showAuthBannerFromQuery(bannerEl) {
 export function initKeyfileInput(keyfileInput, onKeyLoaded) {
     if (!keyfileInput) return;
     
-    keyfileInput.addEventListener('change', (e) => {
+    keyfileInput.addEventListener('change', async (e) => {
         const f = e.target.files[0];
         if (!f) return;
-        const r = new FileReader();
-        r.onload = () => { 
-            if (onKeyLoaded) onKeyLoaded(r.result);
-        };
-        r.readAsText(f);
+        try {
+            const text = await f.text();
+            if (onKeyLoaded) onKeyLoaded(text);
+        } catch (err) {
+            console.warn('Failed to read keyfile:', err);
+        }
     });
 }

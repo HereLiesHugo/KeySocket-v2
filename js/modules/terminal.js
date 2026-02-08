@@ -4,9 +4,9 @@
  */
 
 // Globals from xterm libraries (loaded via script tags before this module)
-const Terminal = window.Terminal || null;
-const FitAddon = (window.FitAddon && (window.FitAddon.FitAddon || window.FitAddon)) || null;
-const WebglAddon = (window.WebglAddon && (window.WebglAddon.WebglAddon || window.WebglAddon)) || null;
+const Terminal = globalThis.Terminal || null;
+const FitAddon = (globalThis.FitAddon && (globalThis.FitAddon.FitAddon || globalThis.FitAddon)) || null;
+const WebglAddon = (globalThis.WebglAddon && (globalThis.WebglAddon.WebglAddon || globalThis.WebglAddon)) || null;
 
 // Module state
 let term = null;
@@ -49,9 +49,30 @@ export function fallbackTerminal(termEl) {
     if (termEl) termEl.textContent = '\n[Terminal not available: xterm.js failed to load]\n';
     
     // Expose fallback terminal globally
-    window.KeySocket = { terminal: term };
+    globalThis.KeySocket = { terminal: term };
     
     return term;
+}
+
+/**
+ * Try to create FitAddon instance with fallback
+ * @returns {Object|null}
+ */
+function tryLoadFitAddon() {
+    if (!FitAddon || (typeof FitAddon !== 'function' && typeof FitAddon !== 'object')) {
+        return null;
+    }
+    try {
+        return new (FitAddon.FitAddon || FitAddon)();
+    } catch (e) {
+        console.warn('FitAddon.FitAddon constructor failed, trying fallback:', e);
+        try {
+            return new FitAddon();
+        } catch (error_) {
+            console.warn('FitAddon fallback constructor failed:', error_);
+            return null;
+        }
+    }
 }
 
 /**
@@ -84,20 +105,12 @@ export async function initTerminal(termEl, options = {}) {
     });
 
     // Load FitAddon
-    if (FitAddon && (typeof FitAddon === 'function' || typeof FitAddon === 'object')) {
+    fit = tryLoadFitAddon();
+    if (fit && typeof fit.fit === 'function') {
         try {
-            fit = new (FitAddon.FitAddon || FitAddon)();
+            term.loadAddon(fit);
         } catch (e) {
-            try {
-                fit = new FitAddon();
-            } catch (ee) {
-                fit = null;
-            }
-        }
-        try {
-            if (fit && typeof fit.fit === 'function') term.loadAddon(fit);
-        } catch (e) {
-            /* ignore addon load errors */
+            console.warn('Failed to load FitAddon into terminal:', e);
         }
     }
 
@@ -120,9 +133,13 @@ export async function initTerminal(termEl, options = {}) {
     }
 
     // Fit to container
-    try {
-        if (fit && typeof fit.fit === 'function') fit.fit();
-    } catch (e) { /* ignore fit errors */ }
+    if (fit && typeof fit.fit === 'function') {
+        try {
+            fit.fit();
+        } catch (e) {
+            console.warn('Initial fit.fit() failed:', e);
+        }
+    }
 
     return { term, fit };
 }

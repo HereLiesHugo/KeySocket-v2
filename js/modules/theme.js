@@ -155,7 +155,9 @@ export function applyTheme(themeKey, options = {}) {
         try {
             root.style.setProperty('--terminal-bg', preset.terminal.background);
             root.style.setProperty('--terminal-fg', preset.terminal.foreground);
-        } catch (e) {}
+        } catch (e) {
+            console.warn('Failed to set terminal CSS variables:', e);
+        }
         
         // Apply to terminal instance if callback provided
         if (options.applyTerminalTheme) {
@@ -166,7 +168,9 @@ export function applyTheme(themeKey, options = {}) {
     // Save to localStorage
     try {
         localStorage.setItem(STORAGE_KEY, currentTheme);
-    } catch (e) {}
+    } catch (e) {
+        console.warn('Failed to save theme to localStorage:', e);
+    }
     
     // Sync select element
     if (options.themeSelect) {
@@ -182,7 +186,9 @@ export function applyThemeFromStorage(options = {}) {
     let stored = null;
     try {
         stored = localStorage.getItem(STORAGE_KEY);
-    } catch (e) {}
+    } catch (e) {
+        console.warn('Failed to read theme from localStorage:', e);
+    }
     if (!stored) stored = 'dark';
     applyTheme(stored, options);
 }
@@ -201,7 +207,9 @@ export function initThemeManagement(themeSelect, options = {}) {
     let stored = null;
     try {
         stored = localStorage.getItem(STORAGE_KEY);
-    } catch (e) {}
+    } catch (e) {
+        console.warn('Failed to read theme from localStorage:', e);
+    }
     if (!stored) stored = 'dark';
     if (!(stored in themePresets)) stored = 'dark';
     

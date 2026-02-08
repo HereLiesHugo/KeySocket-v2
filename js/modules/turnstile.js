@@ -108,7 +108,7 @@ export function verifyTurnstileToken(token, attempt = 0) {
  * @param {Object} callbacks - Callbacks for token handling
  */
 export function initTurnstile(callbacks = {}) {
-    const { onToken, isAuthenticated, connectBtn } = callbacks;
+    const { isAuthenticated, connectBtn } = callbacks;
     
     try {
         if (connectBtn && !isAuthenticated) connectBtn.disabled = true;
@@ -116,14 +116,14 @@ export function initTurnstile(callbacks = {}) {
         if (!widgetEl) return;
 
         // Prevent double-rendering
-        if (widgetEl.dataset && widgetEl.dataset.turnstileRendered === '1') {
+        if (widgetEl.dataset?.turnstileRendered === '1') {
             return;
         }
 
-        if (window.turnstile) {
+        if (globalThis.turnstile) {
             try {
                 widgetEl.innerHTML = '';
-                turnstileWidgetId = window.turnstile.render('#turnstile-widget', { 
+                turnstileWidgetId = globalThis.turnstile.render('#turnstile-widget', { 
                     sitekey: SITEKEY, 
                     callback: (token) => handleTurnstileToken(token, callbacks)
                 });
@@ -142,11 +142,56 @@ export function initTurnstile(callbacks = {}) {
                     s.async = true; 
                     s.defer = true;
                     document.head.appendChild(s);
-                } catch (e) {}
+                } catch (e) {
+                    console.warn('Failed to load Turnstile script:', e);
+                }
             };
             loadScript();
         }
     } catch (e) { console.error('initTurnstile', e); }
+}
+
+/**
+ * Clean up Turnstile widget after verification
+ * @param {boolean} isAuthenticated - Whether user is authenticated
+ */
+function cleanupTurnstileWidget(isAuthenticated) {
+    try {
+        const widgetEl = document.getElementById('turnstile-widget');
+        if (widgetEl && !isAuthenticated) { 
+            widgetEl.innerHTML = ''; 
+            delete widgetEl.dataset.turnstileRendered; 
+        }
+        turnstileWidgetId = null;
+        turnstileRendered = false;
+    } catch (e) {
+        console.warn('Failed to clean up Turnstile widget:', e);
+    }
+}
+
+/**
+ * Handle successful token verification
+ * @param {Object} response - Server response
+ * @param {Object} callbacks - Callbacks
+ */
+function handleVerificationSuccess(response, callbacks) {
+    const { isAuthenticated, connectBtn, onVerified } = callbacks;
+    
+    turnstileToken = response.token;
+    turnstileTTL = Number.parseInt(response.ttl || '30000', 10) || 30000;
+    turnstileVerifiedAt = Date.now();
+
+    if (isAuthenticated) {
+        const ov = document.getElementById('turnstile-overlay');
+        if (ov) ov.style.display = 'none';
+        if (connectBtn) connectBtn.disabled = false;
+    } else {
+        globalThis.location.href = '/auth/google';
+    }
+
+    cleanupTurnstileWidget(isAuthenticated);
+    
+    if (onVerified) onVerified(turnstileToken);
 }
 
 /**
@@ -157,45 +202,44 @@ export function initTurnstile(callbacks = {}) {
 function handleTurnstileToken(token, callbacks) {
     if (!token) return;
     
-    const { isAuthenticated, connectBtn, onVerified, onError } = callbacks;
+    const { onError } = callbacks;
     
-    verifyTurnstileToken(token).then(j => {
-        if (j && j.ok && j.token) {
-            turnstileToken = j.token;
-            turnstileTTL = parseInt(j.ttl || '30000', 10) || 30000;
-            turnstileVerifiedAt = Date.now();
-
-            // Hide overlay if authenticated
-            if (isAuthenticated) {
-                const ov = document.getElementById('turnstile-overlay');
-                if (ov) ov.style.display = 'none';
-                if (connectBtn) connectBtn.disabled = false;
-            } else {
-                window.location.href = '/auth/google';
-            }
-
-            // Clean up widget
-            try {
-                const widgetEl = document.getElementById('turnstile-widget');
-                if (widgetEl && !isAuthenticated) { 
-                    widgetEl.innerHTML = ''; 
-                    delete widgetEl.dataset.turnstileRendered; 
-                }
-                turnstileWidgetId = null;
-                turnstileRendered = false;
-            } catch (e) {}
-            
-            if (onVerified) onVerified(turnstileToken);
+    verifyTurnstileToken(token).then(response => {
+        if (response?.ok && response.token) {
+            handleVerificationSuccess(response, callbacks);
         } else {
-            console.warn('Turnstile verify failed', j);
+            console.warn('Turnstile verify failed', response);
             showTurnstileError('Verification failed. Please try again.');
-            if (onError) onError(j);
+            if (onError) onError(response);
         }
     }).catch(err => {
         console.error('turnstile verify error', err);
-        showTurnstileError(err && err.message ? err.message : 'Verification error');
+        showTurnstileError(err?.message ?? 'Verification error');
         if (onError) onError(err);
     });
+}
+
+/**
+ * Reset existing widget or render new one
+ * @param {Object} callbacks - Callbacks for token handling
+ */
+function renderOrResetWidget(callbacks) {
+    if (turnstileWidgetId) {
+        try { 
+            globalThis.turnstile.reset(turnstileWidgetId); 
+        } catch (e) {
+            console.warn('Failed to reset Turnstile widget, re-rendering:', e);
+            turnstileWidgetId = globalThis.turnstile.render('#turnstile-widget', { 
+                sitekey: SITEKEY, 
+                callback: (token) => handleTurnstileToken(token, callbacks)
+            }); 
+        }
+    } else {
+        turnstileWidgetId = globalThis.turnstile.render('#turnstile-widget', { 
+            sitekey: SITEKEY, 
+            callback: (token) => handleTurnstileToken(token, callbacks)
+        });
+    }
 }
 
 /**
@@ -206,22 +250,8 @@ export function reRunTurnstile(callbacks = {}) {
     const ov = document.getElementById('turnstile-overlay');
     if (ov) ov.style.display = 'flex';
     try {
-        if (window.turnstile) {
-            if (turnstileWidgetId) {
-                try { 
-                    window.turnstile.reset(turnstileWidgetId); 
-                } catch (e) { 
-                    turnstileWidgetId = window.turnstile.render('#turnstile-widget', { 
-                        sitekey: SITEKEY, 
-                        callback: (token) => handleTurnstileToken(token, callbacks)
-                    }); 
-                }
-            } else {
-                turnstileWidgetId = window.turnstile.render('#turnstile-widget', { 
-                    sitekey: SITEKEY, 
-                    callback: (token) => handleTurnstileToken(token, callbacks)
-                });
-            }
+        if (globalThis.turnstile) {
+            renderOrResetWidget(callbacks);
         }
     } catch (e) { console.error('reRunTurnstile', e); }
 }
@@ -239,7 +269,7 @@ export function checkAuthStatus(callbacks = {}) {
             credentials: 'same-origin'
         }).then(r => r.json()).then(data => {
             console.log('Auth status check:', data);
-            const isAuth = !!(data && data.authenticated);
+            const isAuth = !!(data?.authenticated);
             
             if (isAuth) {
                 const ov = document.getElementById('turnstile-overlay');

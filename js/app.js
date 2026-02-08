@@ -135,7 +135,9 @@ async function initApp() {
             if (elements.authSelect) elements.authSelect.value = conn.auth || 'password';
             try {
                 elements.form.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            } catch (e) {}
+            } catch (e) {
+                console.warn('Failed to scroll form into view:', e);
+            }
         }
     });
     
@@ -185,7 +187,11 @@ function handleConnect(e) {
             connectBtn: elements.connectBtn
         });
         if (term) {
-            try { term.writeln('\r\n[INFO] Turnstile token missing or expired; please complete verification.'); } catch (e) {}
+            try {
+                term.writeln('\r\n[INFO] Turnstile token missing or expired; please complete verification.');
+            } catch (e) {
+                console.warn('Failed to write to terminal:', e);
+            }
         }
         showConnectionBanner(elements.authBannerEl, 'Turnstile verification required before connecting.', 'info');
         return;
@@ -251,4 +257,4 @@ globalThis.KeySocket = {
 };
 
 // Initialize application
-initApp();
+await initApp();
