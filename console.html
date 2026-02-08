@@ -1,138 +1,227 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>KeySocket Console - Web SSH Terminal</title>
-    
+
     <!-- SEO Meta Tags -->
-    <meta name="description" content="KeySocket web-based SSH terminal for secure remote server access.">
-    <meta name="robots" content="noindex, nofollow">
-    
+    <meta
+      name="description"
+      content="KeySocket web-based SSH terminal for secure remote server access."
+    />
+    <meta name="robots" content="noindex, nofollow" />
+
     <!-- Technical SEO -->
-    <link rel="canonical" href="https://keysocket.eu/console">
-    <link rel="icon" type="image/x-icon" href="/favicon.ico">
-    
+    <link rel="canonical" href="https://keysocket.eu/console" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+
     <!-- Security Headers -->
-    <meta http-equiv="X-Content-Type-Options" content="nosniff">
-    <meta http-equiv="X-Frame-Options" content="DENY">
-    <meta http-equiv="X-XSS-Protection" content="1; mode=block">
-    <meta name="referrer" content="strict-origin-when-cross-origin">
-    
-    
+    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+    <meta http-equiv="X-Frame-Options" content="DENY" />
+    <meta http-equiv="X-XSS-Protection" content="1; mode=block" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+
     <!-- Stylesheets -->
-    <link rel="stylesheet" href="css/style.css?v=7.1">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css?v=7.1" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
     <link rel="stylesheet" href="/lib/xterm.css" />
-    
+
     <!-- Structured Data -->
-    <link rel="alternate" type="application/ld+json" href="/schema/console.json">
-</head>
-<body>
+    <link
+      rel="alternate"
+      type="application/ld+json"
+      href="/schema/console.json"
+    />
+  </head>
+  <body>
     <div class="app">
-        <header class="topbar">
-            <h1>KeySocket</h1>
-            <div class="topbar-right">
-                <div class="domain">
-                    <a href="https://maturqu.com" target="_blank" rel="noopener noreferrer">Who am I? - maturqu.com</a> | <br>
-                    <a href="https://ko-fi.com/maturqu" target="_blank" rel="noopener noreferrer">Support Me on Ko-fi and help me keep this project free</a> | <br>
-                    <a href="https://github.com/HereLiesHugo/KeySocket-v2/tree/dev">Github (Dev Branch) - This is the experimental development branch and may contain bugs</a> | <br>
-                </div>
+      <header class="topbar">
+        <h1>KeySocket</h1>
+        <div class="topbar-right">
+          <div class="domain">
+            <a
+              href="https://maturqu.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              >Who am I? - maturqu.com</a
+            >
+            | <br />
+            <a
+              href="https://ko-fi.com/maturqu"
+              target="_blank"
+              rel="noopener noreferrer"
+              >Support Me on Ko-fi and help me keep this project free</a
+            >
+            | <br />
+            <a href="https://github.com/HereLiesHugo/KeySocket-v2/tree/dev"
+              >Github (Dev Branch) - This is the experimental development branch
+              and may contain bugs</a
+            >
+            | <br />
+          </div>
+        </div>
+      </header>
+
+      <div
+        id="auth-banner"
+        class="auth-banner"
+        aria-live="polite"
+        aria-atomic="true"
+        hidden
+      ></div>
+
+      <main>
+        <section class="connect">
+          <div class="security-disclaimer">
+            <i class="fas fa-shield-alt"></i>
+            <span
+              >KeySocket acts as a blind tunnel. Your private keys and passwords
+              are processed in RAM only and are never written to disk or
+              logs.</span
+            >
+          </div>
+          <form id="connect-form">
+            <label
+              >Host
+              <input
+                name="host"
+                placeholder="example.com or 192.0.2.1"
+                required
+            /></label>
+            <label>Port <input name="port" type="number" value="22" /></label>
+            <label>Username <input name="username" required /></label>
+            <label
+              >Auth
+              <select id="auth-select" name="auth">
+                <option value="password">Password</option>
+                <option value="key">Private key</option>
+              </select>
+            </label>
+            <label id="password-label"
+              >Password <input name="password" type="password"
+            /></label>
+            <label id="key-label" class="label-hidden"
+              >Private key <input id="keyfile" type="file" accept="*/*"
+            /></label>
+            <label id="passphrase-label" class="label-hidden"
+              >Key passphrase (optional)
+              <input name="passphrase" type="password" autocomplete="off"
+            /></label>
+            <div class="actions">
+              <button id="connect-btn" type="submit">Connect</button>
+              <button id="disconnect-btn" type="button" disabled>
+                Disconnect
+              </button>
+              <button id="save-conn" type="button">Save</button>
+              <select id="saved-list">
+                <option value="">Saved connections</option>
+              </select>
             </div>
-        </header>
+          </form>
+        </section>
 
-        <div id="auth-banner" class="auth-banner" aria-live="polite" aria-atomic="true" hidden></div>
+        <section class="terminal-area">
+          <div class="terminal-controls">
+            <span class="terminal-controls-text"
+              >Drag corner to resize, or use fullscreen</span
+            >
+            <button
+              id="app-management-toggle"
+              type="button"
+              class="app-management-btn"
+            >
+              Settings
+            </button>
+            <button id="fullscreen-btn" type="button" title="Toggle fullscreen">
+              ⛶ Fullscreen
+            </button>
+          </div>
+          <div id="terminal" class="terminal"></div>
+          <div class="resize-handle" id="resize-handle"></div>
+        </section>
+        <div class="keyboard-container" aria-label="Virtual keyboard"></div>
 
-        <main>
-            <section class="connect">
-                <div class="security-disclaimer">
-                    <i class="fas fa-shield-alt"></i>
-                    <span>KeySocket acts as a blind tunnel. Your private keys and passwords are processed in RAM only and are never written to disk or logs.</span>
-                </div>
-                <form id="connect-form">
-                    <label>Host <input name="host" placeholder="example.com or 192.0.2.1" required></label>
-                    <label>Port <input name="port" type="number" value="22"></label>
-                    <label>Username <input name="username" required></label>
-                    <label>Auth
-                        <select id="auth-select" name="auth">
-                            <option value="password">Password</option>
-                            <option value="key">Private key</option>
-                        </select>
-                    </label>
-                    <label id="password-label">Password <input name="password" type="password"></label>
-                    <label id="key-label" class="label-hidden">Private key <input id="keyfile" type="file" accept="*/*"></label>
-                    <label id="passphrase-label" class="label-hidden">Key passphrase (optional) <input name="passphrase" type="password" autocomplete="off"></label>
-                    <div class="actions">
-                        <button id="connect-btn" type="submit">Connect</button>
-                        <button id="disconnect-btn" type="button" disabled>Disconnect</button>
-                        <button id="save-conn" type="button">Save</button>
-                        <select id="saved-list"><option value="">Saved connections</option></select>
-                    </div>
-                </form>
-            </section>
-
-            <section class="terminal-area">
-                <div class="terminal-controls">
-                    <span class="terminal-controls-text">Drag corner to resize, or use fullscreen</span>
-                    <button id="app-management-toggle" type="button" class="app-management-btn">Settings</button>
-                    <button id="fullscreen-btn" type="button" title="Toggle fullscreen">⛶ Fullscreen</button>
-                </div>
-                <div id="terminal" class="terminal"></div>
-                <div class="resize-handle" id="resize-handle"></div>
-            </section>
-            <div class="keyboard-container" aria-label="Virtual keyboard"></div>
-
-            <div id="app-management-overlay" class="app-management-overlay" hidden>
-                <section id="app-management" class="app-management">
-                    <div class="app-management-header">
-                        <h2>App Management</h2>
-                        <button id="app-management-close" type="button" class="app-management-close">Close</button>
-                    </div>
-                    <div class="app-management-grid">
-                        <div class="app-management-section">
-                            <h3>Saved Connections</h3>
-                            <p class="app-management-help">Edit or remove saved SSH connections. These are stored in your browser only.</p>
-                            <div id="app-management-connections-list" class="connections-list"></div>
-                        </div>
-                        <div class="app-management-section">
-                            <h3>Theme</h3>
-                            <p class="app-management-help">Choose how the interface and terminal look. This is saved per browser.</p>
-                            <label>
-                                Theme
-                                <select id="app-theme-select">
-                                    <option value="dark">Dark (Default)</option>
-                                    <option value="darker">Darker</option>
-                                    <option value="light">Light</option>
-                                    <option value="monokai">Monokai</option>
-                                    <option value="dracula">Dracula</option>
-                                    <option value="solarized-dark">Solarized Dark</option>
-                                    <option value="solarized-light">Solarized Light</option>
-                                </select>
-                            </label>
-                        </div>
-                    </div>
-                </section>
+        <div id="app-management-overlay" class="app-management-overlay" hidden>
+          <section id="app-management" class="app-management">
+            <div class="app-management-header">
+              <h2>App Management</h2>
+              <button
+                id="app-management-close"
+                type="button"
+                class="app-management-close"
+              >
+                Close
+              </button>
             </div>
-        </main>
+            <div class="app-management-grid">
+              <div class="app-management-section">
+                <h3>Saved Connections</h3>
+                <p class="app-management-help">
+                  Edit or remove saved SSH connections. These are stored in your
+                  browser only.
+                </p>
+                <div
+                  id="app-management-connections-list"
+                  class="connections-list"
+                ></div>
+              </div>
+              <div class="app-management-section">
+                <h3>Theme</h3>
+                <p class="app-management-help">
+                  Choose how the interface and terminal look. This is saved per
+                  browser.
+                </p>
+                <label>
+                  Theme
+                  <select id="app-theme-select">
+                    <option value="dark">Dark (Default)</option>
+                    <option value="darker">Darker</option>
+                    <option value="light">Light</option>
+                    <option value="monokai">Monokai</option>
+                    <option value="dracula">Dracula</option>
+                    <option value="solarized-dark">Solarized Dark</option>
+                    <option value="solarized-light">Solarized Light</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+          </section>
+        </div>
+      </main>
 
-        <footer class="footer">Secure web SSH gateway — run behind TLS and reverse proxy on <strong>keysocket.eu</strong></footer>
+      <footer class="footer">
+        Secure web SSH gateway — run behind TLS and reverse proxy on
+        <strong>keysocket.eu</strong>
+      </footer>
     </div>
 
     <!-- Turnstile overlay shown on initial site enter until verified -->
     <div id="turnstile-overlay">
-        <div class="turnstile-content">
-            <h3>Verify you're human</h3>
-            <p>Please complete the verification to continue using KeySocket.</p>
-            <div id="turnstile-widget"></div>
-        </div>
+      <div class="turnstile-content">
+        <h3>Verify you're human</h3>
+        <p>Please complete the verification to continue using KeySocket.</p>
+        <div id="turnstile-widget"></div>
+      </div>
     </div>
 
     <script src="/lib/xterm.js"></script>
     <script src="/lib/xterm-addon-fit.js"></script>
     <script src="/lib/xterm-addon-webgl.js"></script>
     <!-- Load Turnstile and call window.ksInitTurnstile when ready -->
-    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=ksInitTurnstile&render=explicit" async defer></script>
-    <script src="js/app.js?v=7.4"></script>
-</body>
+    <script
+      src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=ksInitTurnstile&render=explicit"
+      async
+      defer
+    ></script>
+    <script type="module" src="js/app.js?v=8.0"></script>
+    <script src="js/branch.js"></script>
+  </body>
 </html>
